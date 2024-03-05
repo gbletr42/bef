@@ -93,12 +93,12 @@ static const char *bef_magic = "BEFBABE";
 #define BEF_PAR_I_C_RS	6 //Intel ISA-L Cauchy Reed Solomon
 //#define BEF_PAR_SHSS	7 //NTT's SHSS erasure coding algorithm
 //#define BEF_PAR_PHAZR	8 //Phazr.IO's erasure coding algorithm
-#if defined BEF_ISAL && defined HAVE_ISA_L_H
+#define BEF_PAR_F_V_RS	9 //zfec's libfec Software Vandermonde Reed Solomon
+
+#if defined BEF_LIBERASURECODE && defined HAVE_ISA_L_H
 #define BEF_PAR_DEFAULT	BEF_PAR_I_V_RS
-#elif defined HAVE_JERASURE_H
-#define BEF_PAR_DEFAULT	BEF_PAR_J_V_RS
 #else
-#define BEF_PAR_DEFAULT	BEF_PAR_LE_V_RS
+#define BEF_PAR_DEFAULT	BEF_PAR_F_V_RS
 #endif
 
 /* Custom types */
@@ -106,19 +106,21 @@ typedef uint8_t bef_hash_t;
 typedef uint8_t bef_par_t;
 
 /* Our real header, contains all necessary info */
-struct __attribute__((packed)) bef_real_header {
+struct bef_real_header {
 	uint32_t	seed; //Random seed for parity shuffling
+	uint8_t		pad1[4];
 	uint64_t	nseg; //Number of segments, note they don't exist
 	uint32_t	nblock; //Number of blocks per segment
 	bef_par_t	par_t; //Parity type for all blocks
+	uint8_t		pad2[3];
 	uint16_t	k; //Total number of data fragments per block
 	uint16_t	m; //Total number of parity fragments per block
+	uint8_t		pad3[4];
 	uint64_t	nbyte; //Total number of bytes in each fragment
-	uint8_t		padding[3];
 };
 
 /* Our sexy header */
-struct __attribute__((packed)) bef_header {
+struct bef_header {
 	char			magic[7]; //Our magic number babe ^_^
 	bef_hash_t		hash_t; //hash type for WHOLE FILE
 	uint8_t			hash[BEF_HASH_SIZE]; //hash of header
@@ -127,12 +129,12 @@ struct __attribute__((packed)) bef_header {
 };
 
 /* Block Header struct, what follows after is the body of the block */
-struct __attribute__((packed)) bef_frag_header {
+struct bef_frag_header {
 	uint32_t	block_num;
 	uint16_t	frag_num;
+	uint8_t		pad1[2];
 	uint64_t	pbyte; //For when bytes + header < nbyte
 	uint8_t		hash[BEF_HASH_SIZE]; //hash of fragment body
-	uint8_t		padding[2];
 };
 
 /* Generalized hash function call, makes life easier. Takes in a given input of
@@ -169,7 +171,7 @@ void bef_encode_free(char **data, char **parity, int k, int m);
  *
  * error codes not yet defined, but will return 0 when successful
  */
-int bef_decode_ecc(const char **frags, uint16_t frag_len, size_t frag_b,
+int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
 		   char **output, size_t *onbyte, int k, int m,
 		   bef_par_t par_t);
 

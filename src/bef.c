@@ -19,6 +19,7 @@
 //TODO: Add real error handling!
 
 #include "bef.h"
+#include "fec.h"
 
 #ifdef BEF_OPENSSL
 #include <openssl/evp.h>
@@ -29,10 +30,12 @@
 #ifdef BEF_ZLIB
 #include <zlib.h>
 #endif
+#ifdef BEF_LIBERASURECODE
+#include <erasurecode.h>
+#endif
 
 #include <string.h>
 #include <xxhash.h>
-#include <erasurecode.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <unistd.h>
@@ -41,6 +44,12 @@
 
 /* Global dynamic lookup array representing the location of m parities */
 static uint64_t *m_arr = NULL;
+
+/* Struct for libfec header */
+struct bef_fec_header {
+	uint32_t block_num;
+	uint32_t pbyte;
+};
 
 void *bef_malloc(size_t sz)
 {
@@ -268,6 +277,7 @@ static int bef_get_backend(bef_par_t par_t)
 	return ret;
 }
 
+#ifdef BEF_LIBERASURECODE
 static ec_backend_id_t bef_liberasurecode_par_switch(bef_par_t par_t)
 {
 	ec_backend_id_t ret;
@@ -351,6 +361,72 @@ instance_cleanup:
 out:
 	return ret;
 }
+#endif
+
+/* Due to this being low level, we'll have to add some pivotal metadata
+ * ourselves as a header. First of all, the block number of the block, and since
+ * we know how many k there are, that's all we need to know regarding whether
+ * it's a primary or secondary block. Second of all, the number of padded bytes
+ * to the input packets to make it all fit nicely and smugly.
+ */
+static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
+			     char **parity, size_t *frag_len, int k, int m)
+{
+	struct bef_fec_header header;
+	size_t size = inbyte / k + inbyte % k; //Size of each data fragment
+	unsigned int block_nums[m];
+	fec_t *context;
+	header.pbyte = inbyte % k;
+	*frag_len = sizeof(header) + size;
+
+	/* Allocate our arrays, moving the pointer past the header. I know, it's
+	 * a bit hacky, but it works!
+	 */
+	for(int i = 0; i < k; i++) {
+		*(data + i) = malloc(size + sizeof(header));
+		header.block_num = i;
+
+		if(i < k - 1) {
+			memcpy(*(data + i), &header, sizeof(header));
+			memcpy(*(data + i) + sizeof(header),
+			       input + i * (size - header.pbyte),
+			       size - header.pbyte);
+			memset(*(data + i) + sizeof(header) + size - header.pbyte,
+			       '\0', header.pbyte);
+		} else {
+			memcpy(*(data + i), &header, sizeof(header));
+			memcpy(*(data + i) + sizeof(header),
+			       input + i * (size - header.pbyte), size);
+		}
+
+		*(data + i) += sizeof(header); //Evil and Satanic
+	}
+	for(int i = 0; i < m; i++) {
+		*(parity + i) = malloc(size + sizeof(header));
+		block_nums[i] = k + i;
+		header.block_num = k + i;
+		memcpy(*(parity + i), &header, sizeof(header));
+		*(parity + i) += sizeof(header); //Evil and Satanic
+	}
+
+	/* API says "at least once", so surely multiple times won't hurt? */
+	fec_init();
+
+	context = fec_new(k, k+m);
+
+	/* I rather live with the warning than add a million consts */
+	fec_encode(context, (unsigned char **)data, (unsigned char **) parity,
+		   block_nums, m, size);
+
+	/* Now set the pointers back */
+	for(int i = 0; i < k; i++)
+		*(data + i) -= sizeof(header);
+	for(int i = 0; i < m; i++)
+		*(parity + i) -= sizeof(header);
+
+	fec_free(context);
+	return 0;
+}
 
 int bef_encode_ecc(const char *input, size_t inbyte, char **data,
 		   char **parity,  size_t *frag_len, int k, int m,
@@ -359,6 +435,7 @@ int bef_encode_ecc(const char *input, size_t inbyte, char **data,
 	int ret = 0;
 
 	switch(par_t) {
+#ifdef BEF_LIBERASURECODE
 	case BEF_PAR_J_V_RS:
 	case BEF_PAR_J_C_RS:
 	case BEF_PAR_LE_V_RS:
@@ -366,6 +443,11 @@ int bef_encode_ecc(const char *input, size_t inbyte, char **data,
 	case BEF_PAR_I_C_RS:
 		ret = bef_encode_liberasurecode(input, inbyte, data, parity,
 						frag_len, k, m, par_t);
+		break;
+#endif
+	case BEF_PAR_F_V_RS:
+		ret = bef_encode_libfec(input, inbyte, data, parity, frag_len,
+					k, m);
 		break;
 	default:
 		ret = -BEF_ERR_INVALINPUT;
@@ -383,7 +465,8 @@ void bef_encode_free(char **data, char **parity, int k, int m)
 		free(*(parity + i));
 }
 
-static int bef_decode_liberasurecode(const char **frags, uint16_t frag_len,
+#ifdef BEF_LIBERASURECODE
+static int bef_decode_liberasurecode(char **frags, uint16_t frag_len,
 				     size_t frag_b, char **output,
 				     size_t *onbyte, int k, int m,
 				     bef_par_t par_t)
@@ -415,7 +498,7 @@ static int bef_decode_liberasurecode(const char **frags, uint16_t frag_len,
 		goto out;
 	}
 
-	ret = liberasurecode_decode(desc, (char **) frags, (int) frag_len,
+	ret = liberasurecode_decode(desc, frags, (int) frag_len,
 				    (uint64_t) frag_b, 0, &tmp_output,
 				    &tmp_len);
 	if(ret < 0) {
@@ -441,8 +524,74 @@ instance_cleanup:
 out:
 	return ret;
 }
+#endif
 
-int bef_decode_ecc(const char **frags, uint16_t frag_len, size_t frag_b,
+/* By default, our program automatically grabs the 'primary' blocks in
+ * linear format, which means we only need to find out which ones aren't what
+ * they say they are.
+ */
+static int bef_decode_libfec(char **frags, uint16_t frag_len, size_t frag_b,
+			     char **output, size_t *onbyte, int k, int m)
+{
+	fec_t *context;
+	char *out_arr[m]; //At most m outputs
+	unsigned int block_nums[frag_len];
+	uint8_t found = 0;
+	struct bef_fec_header header;
+	size_t size = frag_b - sizeof(header);
+	uint32_t pbyte = 0;
+	char *tmp; //To avoid duplicate paths later
+	*onbyte = 0; //Unknown as of now
+
+	/* See the odd one out and allocate an output */
+	for(uint16_t i = 0; i < frag_len; i++) {
+		memcpy(&header, *(frags+i), sizeof(header));
+		if(header.block_num != i)
+			out_arr[found++] = malloc(size);
+		/* Get the size of the output buffer on first primary packet */
+		else if(*onbyte == 0 && i != frag_len - 1) {
+			pbyte = header.pbyte;
+			*onbyte = (size - pbyte) * k + pbyte;
+		}
+		block_nums[i] = header.block_num;
+
+		/* Do our evil pointer arithmetic hackery again */
+		*(frags + i) += sizeof(header);
+	}
+
+	/* Allocate our output buffer */
+	*output = malloc(*onbyte);
+
+	fec_init(); //Same question as before, guess we'll find out
+
+	context = fec_new(k, k+m);
+
+	fec_decode(context, (unsigned char **) frags,
+		   (unsigned char **) out_arr, block_nums, size);
+
+	/* Write to output buffer */
+	found = 0;
+	for(uint16_t i = 0; i < frag_len; i++) {
+		if(block_nums[i] == i)
+			tmp = *(frags + i);
+		else
+			tmp = out_arr[found++];
+
+		if(i < frag_len - 1)
+			memcpy(*output + i * (size - pbyte), tmp, size - pbyte);
+		else
+			memcpy(*output + i * (size - pbyte), tmp, size);
+	}
+
+	/* Undo our pointer hackery */
+	for(uint16_t i = 0; i < frag_len; i++)
+		*(frags + i) -= sizeof(header);
+
+	fec_free(context);
+	return 0;
+}
+
+int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
 		   char **output, size_t *onbyte, int k, int m, bef_par_t par_t)
 {
 	int ret = 0;
@@ -452,6 +601,7 @@ int bef_decode_ecc(const char **frags, uint16_t frag_len, size_t frag_b,
 		return -BEF_ERR_NEEDMORE;
 
 	switch(par_t) {
+#ifdef BEF_LIBERASURECODE
 	case BEF_PAR_J_V_RS:
 	case BEF_PAR_J_C_RS:
 	case BEF_PAR_LE_V_RS:
@@ -459,6 +609,11 @@ int bef_decode_ecc(const char **frags, uint16_t frag_len, size_t frag_b,
 	case BEF_PAR_I_C_RS:
 		ret = bef_decode_liberasurecode(frags, frag_len, frag_b, output,
 						onbyte, k, m, par_t);
+		break;
+#endif
+	case BEF_PAR_F_V_RS:
+		ret = bef_decode_libfec(frags, frag_len, frag_b, output, onbyte,
+					k, m);
 		break;
 	default:
 		ret = -BEF_ERR_INVALINPUT;
@@ -691,7 +846,7 @@ out:
 /* I wish there was a way to swap without 3 (4 without cache) seeks ;_; */
 static int bef_construct_swap(int output, char *buf_a, char *buf_b, off_t seg,
 			      uint64_t a, uint64_t b,
-			      uint64_t k, uint64_t m, uint64_t nbyte)
+			      uint16_t k, uint16_t m, uint64_t nbyte)
 {
 	ssize_t bret;
 	off_t off_a;
@@ -806,6 +961,10 @@ static int bef_construct_encode(int input, int output,
 
 	/* Eternal read loop incoming */
 	while(1) {
+		if(block_num == header->nblock && header->nblock != 0) {
+			block_num = 0; //New Segment
+			header->nseg++;
+		}
 
 		bret = read(input, ibuf, ibuf_s);
 		if(bret == 0)
@@ -824,11 +983,6 @@ static int bef_construct_encode(int input, int output,
 		if(bret != obuf_s) {
 			ret = -BEF_ERR_WRITEERR;
 			goto out;
-		}
-
-		if(block_num == header->nblock && header->nblock != 0) {
-			block_num = 0; //New Segment
-			header->nseg++;
 		}
 	}
 
@@ -1084,8 +1238,8 @@ static int bef_deconstruct_block(int input, char **output, size_t *onbyte,
 	lseek(input, (off_t) header.m * header.nbyte, SEEK_CUR);
 
 	/* And now after that digusting loop */
-	ret = bef_decode_ecc((const char **) buf_arr, header.k, frag_b, output,
-			     onbyte, header.k, header.m, header.par_t);
+	ret = bef_decode_ecc(buf_arr, header.k, frag_b, output, onbyte,
+			     header.k, header.m, header.par_t);
 
 buffer_cleanup:
 	bef_deconstruct_free(buf_arr, header.k + header.m);

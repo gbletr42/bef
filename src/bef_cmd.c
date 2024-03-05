@@ -72,6 +72,8 @@ int main(int argc, char **argv) {
 				par_t = BEF_PAR_I_V_RS;
 			else if(strcmp(optarg, "intel-cauchy") == 0)
 				par_t = BEF_PAR_I_C_RS;
+			else if(strcmp(optarg, "fec-vand") == 0)
+				par_t = BEF_PAR_F_V_RS;
 			break;
 		case 'h':
 			if(strcmp(optarg, "none") == 0)

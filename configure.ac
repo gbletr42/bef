@@ -27,9 +27,6 @@ AC_PROG_INSTALL
 
 AC_LANG(C)
 
-dnl Liberasurecode is at this moment a necessity
-AC_CHECK_HEADER([erasurecode.h], [], [AC_MSG_ERROR(liberasurecode is a required dependency of this software package)])
-
 dnl Due to it being default, I'll make XXHASH mandatory
 AC_CHECK_HEADER([xxhash.h], [], [AC_MSG_ERROR(xxHash is a required dependency of this software package)])
 
@@ -37,7 +34,7 @@ dnl Enable Third Party packages
 AC_ARG_WITH([blake3], [AS_HELP_STRING([--with-blake3], [enable BLAKE3 support])], [AC_DEFINE([BEF_BLAKE3], 1, [enables BLAKE3 support]) AC_CHECK_HEADERS([blake3.h]) blake3=yes], [])
 AC_ARG_WITH([zlib], [AS_HELP_STRING([--with-zlib], [enable zlib support])], [AC_DEFINE([BEF_ZLIB], 1, [enables zlib support]) AC_CHECK_HEADERS([zlib.h]) zlib=yes], [])
 AC_ARG_WITH([openssl], [AS_HELP_STRING([--with-openssl], [enable OpenSSL support])], [AC_DEFINE([BEF_OPENSSL], 1, [enables OpenSSL support]) AC_CHECK_HEADERS([openssl/evp.h]) openssl=yes], [])
-AC_ARG_ENABLE([isal], [AS_HELP_STRING([--enable-isal], [enable use of ISA-L as default erasure coding library])], [AC_DEFINE([BEF_ISAL], 1, [sets ISA-L as default erasure code library])], [])
+AC_ARG_WITH([liberasurecode], [AS_HELP_STRING([--with-liberasurecode], [enable liberasurecode support])], [AC_DEFINE([BEF_LIBERASURECODE], 1, [enables liberasurecode support]) AC_CHECK_HEADERS([erasurecode.h]) erasurecode=yes], [])
 AC_CHECK_HEADERS([jerasure.h] [isa-l.h])
 
 dnl Check some specific structs and such
@@ -48,6 +45,7 @@ dnl Conditionals for options
 AM_CONDITIONAL([BLAKE3], [test "$blake3" == "yes"])
 AM_CONDITIONAL([ZLIB], [test "$zlib" == "yes"])
 AM_CONDITIONAL([OPENSSL], [test "$openssl" == "yes"])
+AM_CONDITIONAL([LIBERASURECODE], [test "$erasurecode" == "yes"])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

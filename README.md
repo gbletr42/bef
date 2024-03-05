@@ -14,14 +14,14 @@ Currently any file with more than 1 segment is broken. I could get around to fix
 # Dependencies
 Mandatory dependencies to build this package are
 
-- [liberasurecode](https://github.com/openstack/liberasurecode)
 - [xxhash](https://github.com/Cyan4973/xxHash)
 
-There are some additional optional dependencies as well, currently used to provide additional hash algorithms
+There are some additional optional dependencies as well
 
-- [BLAKE3](https://github.com/BLAKE3-team/BLAKE3/tree/master/c)
-- [OpenSSL](https://www.openssl.org)
-- [Zlib (CRC32)](https://github.com/madler/zlib)
+- [BLAKE3](https://github.com/BLAKE3-team/BLAKE3/tree/master/c) for BLAKE3
+- [OpenSSL](https://www.openssl.org) for SHA1, SHA256, SHA3, BLAKE2S, and MD5
+- [Zlib](https://github.com/madler/zlib) for CRC32
+- [liberasurecode](https://github.com/openstack/liberasurecode) for Jerasure, ISA-L, and its own native implementation of Reed solomon codes, support.
 
 Most of these are provided by distributions, except for liberasurecode and BLAKE3's C interface.
 
@@ -46,7 +46,7 @@ So in general, if these problems persist in the future, I'd recommend another so
 # Future plans
 - Refactoring of code to be more extensible and readable
 - Addition of extensive error handling, rather than the current give up and return approach
-- Addition of builtin Reed-Solomon code, so liberasurecode is not a hard dependency
+- ~~Addition of builtin Reed-Solomon code, so liberasurecode is not a hard dependency~~
 - Modification of format to include interleaving of data fragments
 - If possible, a better way to scramble parity fragments that doesn't require lots of seeks or lots of memory
 - Treating FIFOs, pipes, and regular files differently

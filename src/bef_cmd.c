@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <string.h>
 
 /* Flags as of now are -c and -d and -b and -k and -m and -n
  * Very simple experimental cmdline tool to more easily test stuff
@@ -35,10 +36,12 @@ int main(int argc, char **argv) {
 	uint16_t m = 0;
 	uint64_t bsize = 0;
 	uint32_t nblock = 0;
+	bef_par_t par_t = 0;
+	bef_hash_t hash_t = 0;
 	int ret;
 	int fd;
 
-	while ((opt = getopt(argc, argv, "cdk:m:b:n:")) != -1) {
+	while ((opt = getopt(argc, argv, "cdk:m:b:n:p:h:")) != -1) {
 		switch(opt) {
 		case 'c':
 			cflag = 1;
@@ -58,6 +61,38 @@ int main(int argc, char **argv) {
 		case 'n':
 			nblock = (uint32_t) strtol(optarg, NULL, 10);
 			break;
+		case 'p':
+			if(strcmp(optarg, "jerasure-vand") == 0)
+				par_t = BEF_PAR_J_V_RS;
+			else if(strcmp(optarg, "jerasure-cauchy") == 0)
+				par_t = BEF_PAR_J_C_RS;
+			else if(strcmp(optarg, "liberasurecode-vand") == 0)
+				par_t = BEF_PAR_LE_V_RS;
+			else if(strcmp(optarg, "intel-vand") == 0)
+				par_t = BEF_PAR_I_V_RS;
+			else if(strcmp(optarg, "intel-cauchy") == 0)
+				par_t = BEF_PAR_I_C_RS;
+			break;
+		case 'h':
+			if(strcmp(optarg, "none") == 0)
+				hash_t = BEF_HASH_NONE;
+			else if(strcmp(optarg, "sha1") == 0)
+				hash_t = BEF_HASH_SHA1;
+			else if(strcmp(optarg, "sha256") == 0)
+				hash_t = BEF_HASH_SHA256;
+			else if(strcmp(optarg, "sha3") == 0)
+				hash_t = BEF_HASH_SHA3;
+			else if(strcmp(optarg, "blake2s") == 0)
+				hash_t = BEF_HASH_BLAKE2S;
+			else if(strcmp(optarg, "blake3") == 0)
+				hash_t = BEF_HASH_BLAKE3;
+			else if(strcmp(optarg, "md5") == 0)
+				hash_t = BEF_HASH_MD5;
+			else if(strcmp(optarg, "crc32") == 0)
+				hash_t = BEF_HASH_CRC32;
+			else if(strcmp(optarg, "xxhash") == 0)
+				hash_t = BEF_HASH_XXHASH;
+			break;
 		default:
 			perror("Unknown option\n");
 			break;
@@ -69,7 +104,8 @@ int main(int argc, char **argv) {
 
 	if(cflag) {
 		fd = open(argv[optind], O_RDWR | O_CREAT | O_TRUNC, 0644);
-		ret = bef_construct(STDIN_FILENO, fd, 0, k, m, 0, 0, bsize);
+		ret = bef_construct(STDIN_FILENO, fd, par_t, k, m, hash_t,
+				    nblock, bsize);
 		return ret;
 	} else if(dflag) {
 		fd = open(argv[optind], O_RDONLY);

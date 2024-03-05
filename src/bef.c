@@ -169,6 +169,9 @@ static int bef_digest_openssl(const char *input, uint8_t *output, size_t nbyte,
 		digest_len = BEF_HASH_SIZE; //Truncate to hash size
 	memcpy(output, digest, (size_t) digest_len);
 
+	if(ret != 0)
+		ret = 0;
+
 out:
 	EVP_MD_CTX_free(mdctx);
 	return ret;

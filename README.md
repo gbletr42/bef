@@ -20,7 +20,7 @@ There are some additional optional dependencies as well, currently used to provi
 - [OpenSSL](https://www.openssl.org)
 - [Zlib (CRC32)](https://github.com/madler/zlib)
 
-Most of these are provided by distributions, except for liberasurecode.
+Most of these are provided by distributions, except for liberasurecode and BLAKE3's C interface.
 
 # What does this build on?
 My computer, anything else is happenstance.

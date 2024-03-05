@@ -22,6 +22,9 @@ There are some additional optional dependencies as well, currently used to provi
 
 Most of these are provided by distributions, except for liberasurecode.
 
+# What does this build on?
+My computer, anything else is happenstance.
+
 # Format
 The format is a little complicated and a little simple. Due to limitations in liberasurecode, I could only have at most 32 'fragments' to divide the data. Sadly, that was not going to cut it...
 
@@ -37,8 +40,21 @@ This has some current limitations in design.
 
 So in general, if these problems persist in the future, I'd recommend another solution if any of them impact you.
 
+# Future plans
+- Refactoring of code to be more extensible and readable
+- Addition of extensive error handling, rather than the current give up and return approach
+- Addition of builtin Reed-Solomon code, so liberasurecode is not a hard dependency
+- Modification of format to include interleaving of data fragments
+- If possible, a better way to scramble parity fragments that doesn't require lots of seeks or lots of memory
+- Treating FIFOs, pipes, and regular files differently
+
+# End Goals
+An extensible, fast, and useable file utility to encode and decode erasure coded streams of data. If possible, also to extend the format into a useable block device, to serve as a cheap ward against corruption on filesystems, but that's way far in the future and may not happen.
+
 # Other Solutions
 I feel like I should give a heads up to other solutions and their benefits/flaws
 
-- [par2cmdline](https://github.com/Parchive/par2cmdline) is probably the most well known alternative. It's flaws is that it is extremely slow. Compared to my WIP utility on a 1GIB file with a block/fragment size of 32768 (32k) bytes, and a parity ratio of 1/16, on my laptop SSD with my laptop processor (i5-7300U), it is 114 times slower (took 745.71 seconds) compared to mine (took 6.56 seconds) and also made the computer rather warm. The file was of course in cache and the specific backend library was Intel's ISA-L library through liberasurecode.
-- [zfec](https://github.com/tahoe-lafs/zfec) is not nearly as known, but is a good alternative and my recommended solution to anyone reading this. It is significantly faster than par2cmdline with the limitation that it can only support up to 256 blocks/fragments in total. Compared to my solution, on that same 1GiB file with 256 total share and 240 required share (4MiB per fragment/share), it is 4x slower taking 21.11 seconds compared to 5.53 seconds.
+- [par2cmdline](https://github.com/Parchive/par2cmdline) is probably the most well known alternative. It's flaws is that it is extremely slow. Compared to my WIP utility on a 1GIB file with a block/fragment size of 32768 (32k) bytes, and a parity ratio of 1/16, on my laptop SSD with my laptop processor (i5-7300U), it is 114 times slower (took 745.71 seconds) compared to mine (took 6.56 seconds) and also made the computer rather warm. The file was of course in cache and the specific backend library was Intel's ISA-L library through liberasurecode. By default settings, it still takes a ridiculous 53.74 seconds.
+- [zfec](https://github.com/tahoe-lafs/zfec) is not nearly as known, but is a good alternative and my recommended solution to anyone reading this. It is significantly faster than par2cmdline with the limitation that it can only support up to 256 blocks/fragments in total. Compared to my solution, on that same 1GiB file with 256 total share and 240 required share (4MiB per fragment/share), it is 4x slower taking 21.11 seconds compared to 5.53 seconds. However, when comparing a 16 total share and 15 required, versus 1 great blocksize of 1GiB with 15 data fragments and 1 parity fragment, zfec is 2x as fast, taking 5.12 seconds whereas my command takes 9.08s (ISA-L struggles with large block sizes).
+
+The big take away here is that zfec is stable and useable, and is also ~30x faster in the worst case than par2 in its worst case.

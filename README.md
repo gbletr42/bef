@@ -8,6 +8,9 @@ Okay, now that that scary disclaimer is over, I'd like to introduce what this so
 
 It is not explicitly designed to be secure or free of stuff like buffer overflows and null pointer dereference. I mean, I don't want these things and so my code at least isn't swimming in them to my knowledge, but I don't have confidence in it.
 
+# Current oustanding bugs of note
+Currently any file with more than 1 segment is broken. I could get around to fixing my bad code, but instead I'mma go do other things that are more interesting/fun. When I get around to refactoring both the construct and deconstruct methods to support interleaving and generally not being such a big mess, I'll also ensure proper segment support. 
+
 # Dependencies
 Mandatory dependencies to build this package are
 

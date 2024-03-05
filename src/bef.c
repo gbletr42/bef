@@ -806,10 +806,6 @@ static int bef_construct_encode(int input, int output,
 
 	/* Eternal read loop incoming */
 	while(1) {
-		if(block_num == header->nblock && header->nblock != 0) {
-			block_num = 0; //New Segment
-			header->nseg++;
-		}
 
 		bret = read(input, ibuf, ibuf_s);
 		if(bret == 0)
@@ -828,6 +824,11 @@ static int bef_construct_encode(int input, int output,
 		if(bret != obuf_s) {
 			ret = -BEF_ERR_WRITEERR;
 			goto out;
+		}
+
+		if(block_num == header->nblock && header->nblock != 0) {
+			block_num = 0; //New Segment
+			header->nseg++;
 		}
 	}
 

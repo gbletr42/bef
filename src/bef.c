@@ -506,7 +506,7 @@ static void bef_construct_par_tbl(uint64_t m, uint32_t seed)
 	for(uint64_t i = 0; i < m; i++)
 		m_arr[i] = i;
 
-	/* Modified Fisher-Yates (we only care about indices) */
+	/* Fisher-Yates */
 	for(uint64_t i = m - 1; i > 0; i--) {
 		j = bef_par_rand(i, i + 1, seed); //Use index as hashed value
 		tmp = m_arr[i];
@@ -685,7 +685,7 @@ out:
 	return ret;
 }
 
-/* I wish there was a way to swap without 3 seeks ;_; */
+/* I wish there was a way to swap without 3 (4 without cache) seeks ;_; */
 static int bef_construct_swap(int output, char *buf_a, char *buf_b, off_t seg,
 			      uint64_t a, uint64_t b,
 			      uint64_t k, uint64_t m, uint64_t nbyte)
@@ -729,14 +729,15 @@ static int bef_construct_swap(int output, char *buf_a, char *buf_b, off_t seg,
  * 3. If random index and real index are not equal, swap and goto 1 with new
  *    index
  * 4. Continue to next index from real index.
- * 6. Goto 1 until all indexes are exhausted.
+ * 5. Goto 1 until all indexes are exhausted.
  *
  * Note that m_arr obviously must be constructed by this point.
  *
- * This algorithm is very very inefficient, and is the main source of time taken
- * up by this program. Not sure how to swap the arrays to their correct order in
- * a more efficient way though, but perhaps I'm just being stupid. Can't exactly
- * recommend this software until I find a better algorithm.
+ * This algorithm is very very inefficient, and is one of the main source of
+ * time taken up by this program (it and the erasure coding
+ * interface/libraries). Not sure how to swap the arrays to their correct order
+ * in a more efficient way though, but perhaps I'm just being stupid. Can't
+ * exactly recommend this software until I find a better algorithm.
  */
 static int bef_construct_shuffle(int output, off_t seg, uint16_t k, uint16_t m,
 				 uint64_t nbyte, uint32_t nblock)
@@ -1071,7 +1072,8 @@ static int bef_deconstruct_block(int input, char **output, size_t *onbyte,
 		} else if(ret != 0)
 				goto buffer_cleanup;
 		else
-			memcpy(*(buf_arr + i), ibuf + sizeof(frag_h), frag_b);
+			memcpy(*(buf_arr + i), ibuf + sizeof(frag_h),
+			       frag_b - frag_h.pbyte);
 	}
 
 	/* Skip the parities */

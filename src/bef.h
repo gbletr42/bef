@@ -135,13 +135,6 @@ struct __attribute__((packed)) bef_frag_header {
 	uint8_t		padding[2];
 };
 
-/* Options for segments, note that there can be an unlimited number */
-struct bef_segment_options {
-	uint64_t	num; //Total number of segments
-	uint32_t	nblock; //Total number of blocks per segment
-	uint32_t	padding;
-};
-
 /* Generalized hash function call, makes life easier. Takes in a given input of
  * nbyte bytes and fills the given array with it. It is assumed the array is
  * BEF_HASH_SIZE bytes long, so passing a bad array is very bad.
@@ -228,14 +221,6 @@ int bef_construct(int input, int output,
  * error codes not yet defined, but will return 0 when successful
  */
 int bef_deconstruct(int input, int output);
-
-/* Internally basically the same as above, but it doesn't write the read buffer
- * back out to an output, and instead just tells you whether you can repair the
- * file or not.
- *
- * error codes not yet defined, but will return 0 when successful
- */
-int bef_verify_repair(int input);
 
 /* Memory-related boilerplate functions, crashes when out of memory */
 void *bef_malloc(size_t sz);

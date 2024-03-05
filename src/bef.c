@@ -588,6 +588,8 @@ static int bef_decode_libfec(char **frags, uint16_t frag_len, size_t frag_b,
 		*(frags + i) -= sizeof(header);
 
 	fec_free(context);
+	for(uint8_t i = 0; i < found; i++)
+		free(out_arr[i]);
 	return 0;
 }
 

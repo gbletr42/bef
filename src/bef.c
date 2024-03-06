@@ -19,7 +19,7 @@
 //TODO: Add real error handling!
 
 #include "bef.h"
-#include "fec.h"
+#include "zfec.h"
 
 #ifdef BEF_OPENSSL
 #include <openssl/evp.h>

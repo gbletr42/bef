@@ -16,7 +16,7 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "fec.h"
+#include "zfec.h"
 
 #include <stdio.h>
 #include <stdlib.h>

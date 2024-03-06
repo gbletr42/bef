@@ -20,7 +20,7 @@ AUTOMAKE_OPTIONS = subdir-objects
 CFLAGS += -Wall -Wextra -Wno-sign-compare
 
 bin_PROGRAMS = bef
-bef_SOURCES = src/bef.c src/bef_cmd.c src/fec.c
+bef_SOURCES = src/bef.c src/bef_cmd.c src/zfec.c
 bef_LDADD = -lxxhash
 if BLAKE3
 bef_LDADD += -lblake3

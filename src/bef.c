@@ -549,7 +549,7 @@ static int bef_decode_libfec(char **frags, uint16_t frag_len, size_t frag_b,
 		if(header.block_num != i)
 			out_arr[found++] = malloc(size);
 		/* Get the size of the output buffer on first primary packet */
-		else if(*onbyte == 0 && i != frag_len - 1) {
+		else if(*onbyte == 0 && (i != frag_len - 1 || frag_len == 1)) {
 			pbyte = header.pbyte;
 			*onbyte = (size - pbyte) * k + pbyte;
 		}

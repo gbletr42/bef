@@ -21,7 +21,7 @@ CFLAGS += -Wall -Wextra -Wno-sign-compare
 
 bin_PROGRAMS = bef
 bef_SOURCES = src/bef.c src/bef_cmd.c src/fec.c
-bef_LDADD = -lerasurecode -lxxhash
+bef_LDADD = -lxxhash
 if BLAKE3
 bef_LDADD += -lblake3
 endif
@@ -30,4 +30,7 @@ bef_LDADD += -lz
 endif
 if OPENSSL
 bef_LDADD += -lcrypto
+endif
+if LIBERASURECODE
+bef_LDADD += -lerasurecode
 endif

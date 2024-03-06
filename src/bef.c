@@ -662,7 +662,6 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 	header->header.par_t = par_t;
 	header->header.k = k;
 	header->header.m = m;
-	header->header.nseg = 1; //We don't know how many yet
 
 	/* To get nbyte, which depends on the backend used, we are going to
 	 * construct the first block twice (so I don't have to lug around a
@@ -804,10 +803,6 @@ static int bef_construct_encode(int input, int output,
 
 	/* Eternal read loop incoming */
 	while(1) {
-		if(block_num == header->nblock && header->nblock != 0) {
-			block_num = 0; //New Segment
-			header->nseg++;
-		}
 
 		bret = read(input, ibuf, ibuf_s);
 		if(bret == 0)
@@ -989,8 +984,7 @@ static int bef_deconstruct_header(int input, struct bef_real_header *header,
 
 static int bef_get_parity(int input, char *output, char *ibuf,
 			  uint32_t block_num, uint16_t m,
-			  struct bef_real_header header, bef_hash_t hash_t,
-			  off_t seg)
+			  struct bef_real_header header, bef_hash_t hash_t)
 {
 	int ret = -BEF_ERR_INVALHASH; //We are already at a invalid hash
 	uint64_t frag_b = header.nbyte - sizeof(struct bef_frag_header);
@@ -1007,7 +1001,7 @@ static int bef_get_parity(int input, char *output, char *ibuf,
 		offset = bef_par_location(header.k, header.m, header.nbyte,
 					  m_index);
 
-		lseek(input, seg + offset, SEEK_SET);
+		lseek(input, offset, SEEK_SET);
 		rret = read(input, ibuf, header.nbyte);
 		if(rret != header.nbyte)
 			return -BEF_ERR_READERR;
@@ -1025,8 +1019,7 @@ static int bef_get_parity(int input, char *output, char *ibuf,
 
 static int bef_deconstruct_block(int input, char **output, size_t *onbyte,
 				 struct bef_real_header header,
-				 uint32_t block_num, bef_hash_t hash_t,
-				 off_t seg)
+				 uint32_t block_num, bef_hash_t hash_t)
 {
 	int ret;
 	ssize_t bret;
@@ -1054,7 +1047,7 @@ static int bef_deconstruct_block(int input, char **output, size_t *onbyte,
 		if(ret == -BEF_ERR_INVALHASH) { //Gotta get parity
 			ret = bef_get_parity(input, *(buf_arr + i), ibuf,
 					     block_num, m++, header,
-					     hash_t, seg);
+					     hash_t);
 			if(ret != 0)
 				goto buffer_cleanup;
 		} else if(ret != 0)
@@ -1089,7 +1082,6 @@ int bef_deconstruct(int input, int output)
 	bef_hash_t hash_t;
 	char *obuf;
 	size_t obuf_s;
-	off_t seg_off = (off_t) sizeof(struct bef_header);
 
 	/* Get our heaer and verify its sanity */
 	ret = bef_deconstruct_header(input, &header, &hash_t);
@@ -1103,21 +1095,17 @@ int bef_deconstruct(int input, int output)
 	 * allocated by bef_deconstruct_buffers() and freed by
 	 * bef_deconstruct_free().
 	 */
-	for(uint64_t seg = 0; seg < header.nseg; seg++) {
-		for(uint32_t block = 0; block < header.nblock; block++) {
-			ret = bef_deconstruct_block(input, &obuf, &obuf_s,
-						    header, block, hash_t,
-						    seg_off);
-			if(ret != 0)
-				goto out;
-			bret = write(output, obuf, obuf_s);
-			bef_decode_free(obuf);
-			if(bret != obuf_s) {
-				ret = -BEF_ERR_WRITEERR;
-				goto out;
-			}
+	for(uint32_t block = 0; block < header.nblock; block++) {
+		ret = bef_deconstruct_block(input, &obuf, &obuf_s,
+					    header, block, hash_t);
+		if(ret != 0)
+			goto out;
+		bret = write(output, obuf, obuf_s);
+		bef_decode_free(obuf);
+		if(bret != obuf_s) {
+			ret = -BEF_ERR_WRITEERR;
+			goto out;
 		}
-		seg_off += (off_t) (header.nblock * header.nbyte);
 	}
 
 out:

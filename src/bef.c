@@ -917,6 +917,7 @@ static int bef_construct_shuffle(int output, off_t seg, uint16_t k, uint16_t m,
 
 	/* Transform to m_arr's ordering */
 	for(uint64_t i = 0; i < total_m;) {
+		m_index = c_arr[i];
 		m_index = bef_lookup_par(m_index);
 		if(m_index != i) {
 			ret = bef_construct_swap(output, buf_a, buf_b, seg,
@@ -928,7 +929,7 @@ static int bef_construct_shuffle(int output, off_t seg, uint16_t k, uint16_t m,
 			c_arr[m_index] = tmp;
 		}
 		else {
-			m_index = c_arr[++i]; //index is equal, move forward
+			i++;
 		}
 	}
 out:

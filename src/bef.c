@@ -104,7 +104,7 @@ static void bef_unprepare_header(struct bef_header *header)
 
 static void bef_unprepare_frag_header(struct bef_frag_header *header)
 {
-	header->pbyte = le32toh(header->pbyte);
+	header->pbyte = le64toh(header->pbyte);
 }
 
 #ifdef BEF_ZLIB

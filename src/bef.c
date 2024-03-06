@@ -42,9 +42,6 @@
 #include <sys/random.h>
 #include <endian.h>
 
-/* Global dynamic lookup array representing the location of m parities */
-static uint64_t *m_arr = NULL;
-
 /* Struct for libfec header */
 struct bef_fec_header {
 	uint32_t block_num;
@@ -630,57 +627,6 @@ void bef_decode_free(char *output)
 	free(output);
 }
 
-/* We use XXHASH again, because it's pretty fast for small inputs (github
- * benchmark says about ~140M/s for 64bit inputs). Perhaps we could use
- * something else for our PRNG algorithm, but I feel this is good enough
- *
- * Due to improper use of modulus, it is NOT perfectly uniformly random, but
- * it's *random enough*
- */
-static uint64_t bef_par_rand(uint64_t value, uint64_t range, uint32_t seed)
-{
-	uint8_t input[12];
-	XXH64_hash_t hash;
-
-	memcpy(input, &seed, 4);
-	memcpy(input+4, &value, 8); //Use our value in our input to hash
-
-	hash = XXH3_64bits(input, 12);
-	hash = hash % range; //Keep it in range
-	return (uint64_t) hash;
-}
-
-/* Construction of a shuffled table using the Fisher-Yates algorithm, with the
- * given index being stored in the resulting index. Should be a uniform
- * distribution if bef_par_rand() is uniformly random for its range
- */
-static void bef_construct_par_tbl(uint64_t m, uint32_t seed)
-{
-	uint64_t j;
-	uint64_t tmp;
-
-	/* First allocate the table */
-	m_arr = bef_malloc(m * sizeof(*m_arr));
-
-	/* Allocate the values accordingly */
-	for(uint64_t i = 0; i < m; i++)
-		m_arr[i] = i;
-
-	/* Fisher-Yates */
-	for(uint64_t i = m - 1; i > 0; i--) {
-		j = bef_par_rand(i, i + 1, seed); //Use index as hashed value
-		tmp = m_arr[i];
-		m_arr[i] = m_arr[j];
-		m_arr[j] = tmp;
-	}
-}
-
-/* m_arr MUST ALREADY BE ALLOCATED!!! */
-static uint64_t bef_lookup_par(uint64_t m_index)
-{
-	return m_arr[m_index];
-}
-
 static off_t bef_par_location(uint16_t k, uint16_t m, uint64_t nbyte,
 			      uint64_t m_index)
 {
@@ -845,100 +791,6 @@ out:
 	return ret;
 }
 
-/* I wish there was a way to swap without 3 (4 without cache) seeks ;_; */
-static int bef_construct_swap(int output, char *buf_a, char *buf_b, off_t seg,
-			      uint64_t a, uint64_t b,
-			      uint16_t k, uint16_t m, uint64_t nbyte)
-{
-	ssize_t bret;
-	off_t off_a;
-	off_t off_b;
-
-	/* Get our swapees */
-	off_a = bef_par_location(k, m, nbyte, a);
-	lseek(output, seg + off_a, SEEK_SET);
-	bret = read(output, buf_a, nbyte); //Our original
-	if(bret != nbyte)
-		return -BEF_ERR_READERR;
-
-	off_b = bef_par_location(k, m, nbyte, b);
-	lseek(output, seg + off_b, SEEK_SET);
-	bret = read(output, buf_b, nbyte); //Our swapee
-	if(bret != nbyte)
-		return -BEF_ERR_READERR;
-
-	/* Write our swapees */
-	lseek(output, seg + off_b, SEEK_SET); //Go right back!
-	bret = write(output, buf_a, nbyte); //RIP fragment b
-	if(bret != nbyte)
-		return -BEF_ERR_WRITEERR;
-
-	lseek(output, seg + off_a, SEEK_SET);
-	bret = write(output, buf_b, nbyte); //RIP fragment a
-	if(bret != nbyte)
-		return -BEF_ERR_WRITEERR;
-
-	return 0;
-}
-
-/* Shuffling algorithm that goes like thus, treating all parities as one giant
- * array of values with a index relative to the total number of parities.
- *
- * 1. Calculate index
- * 2. Use some lookup algorithm to get the new random index
- * 3. If random index and real index are not equal, swap and goto 1 with new
- *    index
- * 4. Continue to next index from real index.
- * 5. Goto 1 until all indexes are exhausted.
- *
- * Note that m_arr obviously must be constructed by this point.
- *
- * This algorithm is very very inefficient, and is one of the main source of
- * time taken up by this program (it and the erasure coding
- * interface/libraries). Not sure how to swap the arrays to their correct order
- * in a more efficient way though, but perhaps I'm just being stupid. Can't
- * exactly recommend this software until I find a better algorithm.
- */
-static int bef_construct_shuffle(int output, off_t seg, uint16_t k, uint16_t m,
-				 uint64_t nbyte, uint32_t nblock)
-{
-	int ret = 0;
-	uint64_t m_index = 0; //First index
-	uint64_t total_m = ((uint64_t) nblock) * m;
-	char *buf_a = bef_malloc(nbyte);
-	char *buf_b = bef_malloc(nbyte);
-	/* Keep track of the current indices */
-	uint64_t *c_arr = bef_malloc(total_m * sizeof(*c_arr));
-	uint64_t tmp;
-
-	/* Allocate current array to default values */
-	for(uint64_t i = 0; i < total_m; i++)
-		c_arr[i] = i;
-
-	/* Transform to m_arr's ordering */
-	for(uint64_t i = 0; i < total_m;) {
-		m_index = c_arr[i];
-		m_index = bef_lookup_par(m_index);
-		if(m_index != i) {
-			ret = bef_construct_swap(output, buf_a, buf_b, seg,
-						 i, m_index, k, m, nbyte);
-			if(ret != 0)
-				goto out;
-			tmp = c_arr[i];
-			c_arr[i] = c_arr[m_index];
-			c_arr[m_index] = tmp;
-		}
-		else {
-			i++;
-		}
-	}
-out:
-	free(c_arr);
-	free(buf_a);
-	free(buf_b);
-	return ret;
-}
-
 static int bef_construct_encode(int input, int output,
 				char *ibuf, size_t ibuf_s, bef_hash_t hash_t,
 				struct bef_header *head)
@@ -993,21 +845,7 @@ static int bef_construct_encode(int input, int output,
 	if(header->nblock == 0 && block_num > 0)
 		header->nblock = block_num;
 
-	/* Construct parity table */
-	bef_construct_par_tbl(header->m * header->nblock, header->seed);
-
-	/* Now we gotta shuffle the parities around using our hash map */
-	for(uint64_t i = 0; i < header->nseg; i++) {
-		ret = bef_construct_shuffle(output, offset, header->k,
-					    header->m, header->nbyte,
-					    header->nblock);
-		if(ret != 0)
-			goto out;
-		offset += (off_t) (header->nblock * header->nbyte);
-	}
-
 out:
-	free(m_arr); //May not exist, but is NULL otherwise so its all good
 	free(obuf);
 	free(ibuf);
 	return ret;
@@ -1177,7 +1015,6 @@ static int bef_get_parity(int input, char *output, char *ibuf,
 			return -BEF_ERR_NEEDMORE;
 
 		m_index = block_num * header.m + m;
-		m_index = bef_lookup_par(m_index);
 		offset = bef_par_location(header.k, header.m, header.nbyte,
 					  m_index);
 
@@ -1269,9 +1106,6 @@ int bef_deconstruct(int input, int output)
 	if(ret != 0)
 		goto out;
 
-	/* Generate parity lookup table */
-	bef_construct_par_tbl(header.m * header.nblock, header.seed);
-
 	/* Now read each block of each segment, skipping parities unless
 	 * absolutely necessary. This allows for us to reconstruct as fast as
 	 * possible due to the linear arrangement of the data. Our buffer will
@@ -1296,6 +1130,5 @@ int bef_deconstruct(int input, int output)
 	}
 
 out:
-	free(m_arr); //NULL so all good!
 	return ret;
 }

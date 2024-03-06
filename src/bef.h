@@ -130,9 +130,6 @@ struct bef_header {
 
 /* Block Header struct, what follows after is the body of the block */
 struct bef_frag_header {
-	uint32_t	block_num;
-	uint16_t	frag_num;
-	uint8_t		pad1[2];
 	uint64_t	pbyte; //For when bytes + header < nbyte
 	uint8_t		hash[BEF_HASH_SIZE]; //hash of fragment body
 };

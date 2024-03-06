@@ -90,8 +90,7 @@ static void bef_prepare_header(struct bef_header *header)
 
 static void bef_prepare_frag_header(struct bef_frag_header *header)
 {
-	header->block_num = htole32(header->block_num);
-	header->frag_num = htole16(header->frag_num);
+	header->pbyte = htole64(header->pbyte);
 }
 
 static void bef_unprepare_header(struct bef_header *header)
@@ -105,8 +104,7 @@ static void bef_unprepare_header(struct bef_header *header)
 
 static void bef_unprepare_frag_header(struct bef_frag_header *header)
 {
-	header->block_num = le32toh(header->block_num);
-	header->frag_num = le16toh(header->frag_num);
+	header->pbyte = le32toh(header->pbyte);
 }
 
 #ifdef BEF_ZLIB
@@ -694,13 +692,10 @@ out:
 }
 
 static int bef_construct_frag_h(char *input, size_t frag_len,
-				uint32_t block_num, uint16_t frag_num,
 				bef_hash_t hash_t, uint64_t nbyte,
 				struct bef_frag_header *header)
 {
 	int ret;
-	header->block_num = block_num;
-	header->frag_num = frag_num;
 	nbyte -= (uint64_t) (frag_len + sizeof(*header));
 	if(nbyte > 0)
 		header->pbyte = nbyte;
@@ -713,15 +708,13 @@ static int bef_construct_frag_h(char *input, size_t frag_len,
 }
 
 static int bef_construct_frag(char *output, char *body, size_t frag_len,
-			      uint32_t block_num, uint16_t frag_num,
 			      bef_hash_t hash_t, uint64_t nbyte)
 {
 	int ret;
 	struct bef_frag_header header;
 	size_t offset = 0;
 
-	ret = bef_construct_frag_h(body, frag_len, block_num, frag_num, hash_t,
-				   nbyte, &header);
+	ret = bef_construct_frag_h(body, frag_len, hash_t, nbyte, &header);
 	if(ret != 0)
 		return ret;
 	bef_prepare_frag_header(&header);
@@ -739,24 +732,21 @@ static int bef_construct_frag(char *output, char *body, size_t frag_len,
  */
 static int bef_construct_block(char *output, char **data, char **parity,
 			       uint16_t k, uint16_t m, size_t frag_len,
-			       uint32_t block_num, uint64_t nbyte,
-			       bef_hash_t hash_t)
+			       uint64_t nbyte, bef_hash_t hash_t)
 {
 	int ret;
 	size_t offset = 0;
-	uint16_t frag_num = 0;
 
 	for(uint16_t i = 0; i < k; i++) {
 		ret = bef_construct_frag(output + offset, *(data + i), frag_len,
-					 block_num, frag_num++, hash_t, nbyte);
+					 hash_t, nbyte);
 		if(ret != 0)
 			return ret;
 		offset += (size_t) nbyte;
 	}
 	for(uint16_t i = 0; i < m; i++) {
 		ret = bef_construct_frag(output + offset, *(parity + i),
-					 frag_len, block_num, frag_num++,
-					 hash_t, nbyte);
+					 frag_len, hash_t, nbyte);
 		if(ret != 0)
 			return ret;
 		offset += (size_t) nbyte;
@@ -766,8 +756,7 @@ static int bef_construct_block(char *output, char **data, char **parity,
 }
 
 static int bef_encode_block(char *ibuf, size_t ibuf_s, char *obuf,
-			    uint32_t block_num, bef_hash_t hash_t,
-			    struct bef_real_header *header)
+			    bef_hash_t hash_t, struct bef_real_header *header)
 {
 	int ret;
 	char **data = bef_malloc(header->k * sizeof(*data));
@@ -779,8 +768,7 @@ static int bef_encode_block(char *ibuf, size_t ibuf_s, char *obuf,
 	if(ret != 0)
 		goto out;
 	ret = bef_construct_block(obuf, data, parity, header->k, header->m,
-				  frag_len, block_num, header->nbyte,
-				  hash_t);
+				  frag_len, header->nbyte, hash_t);
 	bef_encode_free(data, parity, header->k, header->m);
 	if(ret != 0)
 		goto out;
@@ -800,11 +788,11 @@ static int bef_construct_encode(int input, int output,
 	struct bef_real_header *header = &(head->header);
 	size_t obuf_s = (header->k + header->m) * header->nbyte;
 	char *obuf = bef_malloc(obuf_s);
-	uint32_t block_num = 0;
+	uint32_t block_num = 1;
 	off_t offset = (off_t) sizeof(struct bef_header);
 
 	/* Redo very first block, source still in input */
-	ret = bef_encode_block(ibuf, ibuf_s, obuf, block_num++, hash_t, header);
+	ret = bef_encode_block(ibuf, ibuf_s, obuf, hash_t, header);
 	if(ret != 0)
 		goto out;
 
@@ -829,8 +817,7 @@ static int bef_construct_encode(int input, int output,
 			goto out;
 		}
 
-		ret = bef_encode_block(ibuf, bret, obuf, block_num++, hash_t,
-				       header);
+		ret = bef_encode_block(ibuf, bret, obuf, hash_t, header);
 		if(ret != 0)
 			goto out;
 
@@ -839,6 +826,8 @@ static int bef_construct_encode(int input, int output,
 			ret = -BEF_ERR_WRITEERR;
 			goto out;
 		}
+
+		block_num++;
 	}
 
 	/* Set real nblock */
@@ -1036,7 +1025,8 @@ static int bef_get_parity(int input, char *output, char *ibuf,
 
 static int bef_deconstruct_block(int input, char **output, size_t *onbyte,
 				 struct bef_real_header header,
-				 bef_hash_t hash_t, off_t seg)
+				 uint32_t block_num, bef_hash_t hash_t,
+				 off_t seg)
 {
 	int ret;
 	ssize_t bret;
@@ -1063,7 +1053,7 @@ static int bef_deconstruct_block(int input, char **output, size_t *onbyte,
 		ret = bef_verify_fragment(ibuf, header.nbyte, hash_t);
 		if(ret == -BEF_ERR_INVALHASH) { //Gotta get parity
 			ret = bef_get_parity(input, *(buf_arr + i), ibuf,
-					     frag_h.block_num, m++, header,
+					     block_num, m++, header,
 					     hash_t, seg);
 			if(ret != 0)
 				goto buffer_cleanup;
@@ -1116,7 +1106,8 @@ int bef_deconstruct(int input, int output)
 	for(uint64_t seg = 0; seg < header.nseg; seg++) {
 		for(uint32_t block = 0; block < header.nblock; block++) {
 			ret = bef_deconstruct_block(input, &obuf, &obuf_s,
-						    header, hash_t, seg_off);
+						    header, block, hash_t,
+						    seg_off);
 			if(ret != 0)
 				goto out;
 			bret = write(output, obuf, obuf_s);

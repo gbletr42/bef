@@ -95,11 +95,10 @@ static const char *bef_magic = "BEFBABE";
 //#define BEF_PAR_PHAZR	8 //Phazr.IO's erasure coding algorithm
 #define BEF_PAR_F_V_RS	9 //zfec's libfec Software Vandermonde Reed Solomon
 
-#if defined BEF_LIBERASURECODE && defined HAVE_ISA_L_H
-#define BEF_PAR_DEFAULT	BEF_PAR_I_V_RS
-#else
+/* I find that, unless it's exceptionally large number of fragments, zfec's
+ * modified libfec seems to be by far the fastest
+ */
 #define BEF_PAR_DEFAULT	BEF_PAR_F_V_RS
-#endif
 
 /* Custom types */
 typedef uint8_t bef_hash_t;

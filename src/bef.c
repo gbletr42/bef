@@ -976,7 +976,7 @@ static int bef_construct_encode(int input, int output,
 			goto out;
 		}
 
-		ret = bef_encode_block(ibuf, ibuf_s, obuf, block_num++, hash_t,
+		ret = bef_encode_block(ibuf, bret, obuf, block_num++, hash_t,
 				       header);
 		if(ret != 0)
 			goto out;
@@ -1240,8 +1240,8 @@ static int bef_deconstruct_block(int input, char **output, size_t *onbyte,
 	lseek(input, (off_t) header.m * header.nbyte, SEEK_CUR);
 
 	/* And now after that digusting loop */
-	ret = bef_decode_ecc(buf_arr, header.k, frag_b, output, onbyte,
-			     header.k, header.m, header.par_t);
+	ret = bef_decode_ecc(buf_arr, header.k, frag_b - frag_h.pbyte, output,
+			     onbyte, header.k, header.m, header.par_t);
 
 buffer_cleanup:
 	bef_deconstruct_free(buf_arr, header.k + header.m);

@@ -1,0 +1,45 @@
+INSTALLATION INSTRUCTIONS
+
+To build and install the libfec libraries, simply say
+
+./configure
+make
+make test (optional)
+make install (as root)
+
+By default, "make install" puts the libfec libraries in
+/usr/local/lib, the include files in /usr/local/include, and the
+manual page in /usr/local/man.
+
+You may have an old version of the GNU assembler that cannot handle
+the relatively new SSE2 mnemonics. Update your version of the GNU
+"binutils" package.
+
+You may obtain the latest binutils package through your normal
+distribution channels or from:
+
+http://sources.redhat.com/binutils/
+
+TESTING THE FEC LIBRARY
+
+After running the ./configure script, optional tests can be built and
+run as follows:
+
+make test
+
+"make test" tests each routine, using the SIMD versions as
+appropriate, verifying correct operation and estimating Viterbi
+decoding speeds. These tests should always succeed unless something is
+broken.
+
+28 Mar 2004
+Phil Karn, karn@ka9q.net
+
+-----------------------------
+ADDENDUM
+
+The original libfec did not know about x86-64. This caused builds to break on that CPU family.
+
+This version contains a (lightly modified) working build. It does not contain optimized assembly instructions for x86-64, however.
+
+Also, when building under x86-64, it is necessary to tell libfec about your host. This can easily be accomplished by passing the --build flag to ./configure. For example, if the standard ./configure contained here thinks that my host is i386-apple-darwin15.0.0, then I will call `./configure --build=x86_64-apple-darwin15.0.0`.

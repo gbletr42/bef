@@ -85,15 +85,20 @@ static const char *bef_magic = "BEFBABE";
 
 /* Our parity types, currently just copied liberasurecode
  * Haven't used/benchmarked non reed solomon codes */
-//#define BEF_PAR_XOR	1 //Basic Flat XOR
-#define BEF_PAR_J_V_RS	2 //Jerasure Vandermonde Reed Solomon
-#define BEF_PAR_J_C_RS	3 //Jerasure Cauchy Reed Solomon
-#define BEF_PAR_LE_V_RS	4 //liberasurecode Software Vandermonde Reed Solomon
-#define BEF_PAR_I_V_RS	5 //Intel ISA-L Vandermonde Reed Solomon
-#define BEF_PAR_I_C_RS	6 //Intel ISA-L Cauchy Reed Solomon
-//#define BEF_PAR_SHSS	7 //NTT's SHSS erasure coding algorithm
-//#define BEF_PAR_PHAZR	8 //Phazr.IO's erasure coding algorithm
-#define BEF_PAR_F_V_RS	9 //zfec's libfec Software Vandermonde Reed Solomon
+#define	BEF_PAR_NONE	1 //No erasure code parities of any kind
+//#define BEF_PAR_XOR	2 //Basic Flat XOR
+#define BEF_PAR_J_V_RS	3 //Jerasure Vandermonde Reed Solomon
+#define BEF_PAR_J_C_RS	4 //Jerasure Cauchy Reed Solomon
+#define BEF_PAR_LE_V_RS	5 //liberasurecode Software Vandermonde Reed Solomon
+#define BEF_PAR_I_V_RS	6 //Intel ISA-L Vandermonde Reed Solomon
+#define BEF_PAR_I_C_RS	7 //Intel ISA-L Cauchy Reed Solomon
+//#define BEF_PAR_SHSS	8 //NTT's SHSS erasure coding algorithm
+//#define BEF_PAR_PHAZR	9 //Phazr.IO's erasure coding algorithm
+#define BEF_PAR_F_V_RS	10 //zfec's libfec Software Vandermonde Reed Solomon
+
+/* Our convolutional code types, currently just Voyager code
+ */
+#define	BEF_CONV_VOYAGER	1 //r=1/2, k=7, used on Voyager Missions
 
 /* I find that, unless it's exceptionally large number of fragments, zfec's
  * modified libfec seems to be by far the fastest
@@ -103,6 +108,7 @@ static const char *bef_magic = "BEFBABE";
 /* Custom types */
 typedef uint8_t bef_hash_t;
 typedef uint8_t bef_par_t;
+typedef uint8_t bef_conv_t;
 
 /* Our real header, contains all necessary info */
 struct bef_real_header {
@@ -111,7 +117,8 @@ struct bef_real_header {
 	uint16_t	k; //Total number of data fragments per block
 	uint16_t	m; //Total number of parity fragments per block
 	bef_par_t	par_t; //Parity type for all blocks
-	uint8_t		pad1[3];
+	bef_conv_t	conv_t; //Convolutional code type for all blocks
+	uint8_t		pad1[6];
 };
 
 /* Our sexy header */

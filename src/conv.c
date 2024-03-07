@@ -100,7 +100,7 @@ static uint8_t bef_bit_read(struct bef_bit_io *p, uint32_t n)
 {
 	uint32_t read = 0;
 	uint32_t m = n;
-	uint8_t mask = (1 << n) - 1;
+	uint8_t mask;
 
 	if(p->byte_len < n) {
 		read = p->byte & ((1 << p->byte_len) - 1);
@@ -111,6 +111,7 @@ static uint8_t bef_bit_read(struct bef_bit_io *p, uint32_t n)
 		read <<= n;
 	}
 
+	mask = (1 << n) - 1;
 	mask <<= (p->byte_len - n);
 	read |= (p->byte & mask) >> (p->byte_len - n);
 	p->byte_len -= n;

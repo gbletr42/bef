@@ -65,11 +65,22 @@ static const char *bef_magic = "BEFBABE";
 #define BEF_K_DEFAULT	15
 #define BEF_M_DEFAULT	1
 
+/* Default number of blocks to interleave is 3, which with default block size
+ * and parities, provides protections for 12KiB burst corruption in the best
+ * case and around 4KiB burst corruption in the worst case (it hits both the
+ * block behind and in front of it along with decimating the poor original
+ * block). I feel this is pretty good burst corruption protection, and should
+ * serve to protect against at least a bad sector in a 4096-byte sector hard
+ * disk.
+ */
+#define BEF_IL_N_DEFAULT 3
+
 /* Max hash size in header in bytes */
 #define BEF_HASH_SIZE 32
 
 /* Our various backends */
 #define BEF_BACKEND_LIBERASURECODE	1
+#define	BEF_BACKEND_LIBFEC		2
 
 /* Our various hash types */
 #define BEF_HASH_NONE		1 //Living life dangerously
@@ -96,14 +107,24 @@ static const char *bef_magic = "BEFBABE";
 //#define BEF_PAR_PHAZR	9 //Phazr.IO's erasure coding algorithm
 #define BEF_PAR_F_V_RS	10 //zfec's libfec Software Vandermonde Reed Solomon
 
-/* Our convolutional code types, currently just Voyager code
- */
-#define	BEF_CONV_VOYAGER	1 //r=1/2, k=7, used on Voyager Missions
-
 /* I find that, unless it's exceptionally large number of fragments, zfec's
  * modified libfec seems to be by far the fastest
  */
 #define BEF_PAR_DEFAULT	BEF_PAR_F_V_RS
+
+/* Our convolutional code types, currently just Voyager code
+ */
+#define BEF_CONV_NONE		1 //No convolutional code, default
+#define	BEF_CONV_VOYAGER	2 //r=1/2, k=7, used on Voyager Missions
+
+/* In general, most systems protect against random noise, HDDs and SSDs both
+ * have ECCs, Ethernet has CRC32, TCP and UDP both have XOR checksums, etc. It
+ * would be rare to need protection against random noise in today's world,
+ * unless you're transmitting over a noisy link without good retransmission
+ * abilities, such as in radio telecommunications. If so, you can set to use
+ * convolutional codes to optionally protect against random noise.
+ */
+#define BEF_CONV_DEFAULT	BEF_CONV_NONE
 
 /* Custom types */
 typedef uint8_t bef_hash_t;
@@ -116,10 +137,11 @@ struct bef_real_header {
 	uint32_t	seed; //Random seed for parity shuffling
 	uint16_t	k; //Total number of data fragments per block
 	uint16_t	m; //Total number of parity fragments per block
+	uint16_t	il_n; //Number of blocks to interleave
 	bef_par_t	par_t; //Parity type for all blocks
 	bef_conv_t	conv_t; //Convolutional code type for all blocks
 	bef_hash_t	hash_t; //Copy of bef_header's hash_t
-	uint8_t		pad1[5];
+	uint8_t		pad1[3];
 };
 
 /* Our sexy header */

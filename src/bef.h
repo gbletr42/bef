@@ -108,7 +108,6 @@ typedef uint8_t bef_par_t;
 struct bef_real_header {
 	uint64_t	nbyte; //Total number of bytes in each fragment
 	uint32_t	seed; //Random seed for parity shuffling
-	uint32_t	nblock; //Number of blocks per segment
 	uint16_t	k; //Total number of data fragments per block
 	uint16_t	m; //Total number of parity fragments per block
 	bef_par_t	par_t; //Parity type for all blocks

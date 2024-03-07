@@ -118,7 +118,8 @@ struct bef_real_header {
 	uint16_t	m; //Total number of parity fragments per block
 	bef_par_t	par_t; //Parity type for all blocks
 	bef_conv_t	conv_t; //Convolutional code type for all blocks
-	uint8_t		pad1[6];
+	bef_hash_t	hash_t; //Copy of bef_header's hash_t
+	uint8_t		pad1[5];
 };
 
 /* Our sexy header */

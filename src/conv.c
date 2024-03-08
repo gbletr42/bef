@@ -18,6 +18,9 @@
  */
 #include "conv.h"
 
+#define BEF_BIT_READ	0
+#define BEF_BIT_WRITE	1
+
 /* Bit abstraction structs */
 struct bef_bit_io {
 	uint8_t *buf;
@@ -59,7 +62,7 @@ static void bef_bit_io_configure(struct bef_bit_io *p, uint8_t *buf, size_t len,
 	p->buf = buf;
 	p->len = len;
 
-	if(flag == 0) {
+	if(flag == BEF_BIT_READ) {
 		p->byte = *buf;
 		p->byte_len = 8;
 	} else {
@@ -175,8 +178,8 @@ void bef_conv_encode(char *ibuf, size_t ibuf_s, char *obuf,
 	struct bef_bit_io reader;
 	uint32_t out;
 
-	bef_bit_io_configure(&writer, (uint8_t *) obuf, obuf_s, 1);
-	bef_bit_io_configure(&reader, (uint8_t *) ibuf, ibuf_s, 0);
+	bef_bit_io_configure(&writer, (uint8_t *) obuf, obuf_s, BEF_BIT_WRITE);
+	bef_bit_io_configure(&reader, (uint8_t *) ibuf, ibuf_s, BEF_BIT_READ);
 
 	for(size_t i = 0; i < 8 * ibuf_s; i++) {
 		/* shiftregister has oldest bits on left, newest on right */

@@ -68,8 +68,8 @@ static const char *bef_magic = "BEFBABE";
 /* Default number of blocks to interleave is 3, which with default block size
  * and parities, provides protections for 12KiB burst corruption in the best
  * case and around 4KiB burst corruption in the worst case (it hits both the
- * block behind and in front of it along with decimating the poor original
- * block). I feel this is pretty good burst corruption protection, and should
+ * fragment behind and in front of it along with decimating the poor original
+ * fragment). I feel this is pretty good burst corruption protection, and should
  * serve to protect against at least a bad sector in a 4096-byte sector hard
  * disk.
  */
@@ -126,13 +126,23 @@ static const char *bef_magic = "BEFBABE";
  */
 #define BEF_CONV_DEFAULT	BEF_CONV_NONE
 
+/* Special flags that modify the behavior of the format. Currently there is
+ * support for up to 64 flags. This is to enable support for future features not
+ * yet implemented.
+ */
+/* Nothing here yet! */
+
 /* Custom types */
 typedef uint8_t bef_hash_t;
 typedef uint8_t bef_par_t;
 typedef uint8_t bef_conv_t;
 
-/* Our real header, contains all necessary info */
+/* Our real header, contains all necessary info. Padding is deliberately large
+ * enough to allow for future additions to the format while keeping
+ * backwards/forwards compatibility.
+ */
 struct bef_real_header {
+	uint64_t	flags; //Special flags
 	uint64_t	nbyte; //Total number of bytes in each fragment
 	uint32_t	seed; //Random seed for parity shuffling
 	uint16_t	k; //Total number of data fragments per block
@@ -141,10 +151,10 @@ struct bef_real_header {
 	bef_par_t	par_t; //Parity type for all blocks
 	bef_conv_t	conv_t; //Convolutional code type for all blocks
 	bef_hash_t	hash_t; //Copy of bef_header's hash_t
-	uint8_t		pad1[3];
+	uint8_t		padding[35];
 };
 
-/* Our sexy header */
+/* Our sexy header, total overhead is now forever 161 bytes */
 struct bef_header {
 	char			magic[7]; //Our magic number babe ^_^
 	bef_hash_t		hash_t; //hash type for WHOLE FILE
@@ -155,8 +165,8 @@ struct bef_header {
 
 /* Block Header struct, what follows after is the body of the block */
 struct bef_frag_header {
-	uint64_t	pbyte; //For when bytes + header < nbyte
-	uint8_t		hash[BEF_HASH_SIZE]; //hash of fragment body
+	uint64_t	pbyte; //Padded bytes for whole file
+	uint8_t		hash[BEF_HASH_SIZE]; //hash of whole fragment
 };
 
 /* Generalized hash function call, makes life easier. Takes in a given input of
@@ -222,14 +232,13 @@ void bef_decode_free(char *output);
  * If k is set to 0, it will default to BEF_K_DEFAULT
  * If m is set to 0, it will default to BEF_M_DEFAULT
  *
- * Due to limitations in design, the output file MUST be seekable, so as to
- * shuffle the parities.
+ * If il_n is set to 0, it will default to BEF_IL_N_DEFAULT
  *
  * error codes not yet defined, but will return 0 when successful
  */
 int bef_construct(int input, int output,
 		  bef_par_t par_t, uint16_t k, uint16_t m, bef_hash_t hash_t,
-		  uint32_t nblock, uint64_t bsize);
+		  uint16_t il_n, uint64_t bsize);
 
 /* Main function that does the inverse of the above function, it decodes my
  * shitty format into usable data again. Comparatively speaking at least, it has

@@ -24,7 +24,7 @@
 #include <fcntl.h>
 #include <string.h>
 
-/* Flags as of now are -c and -d and -b and -k and -m and -n
+/* Flags as of now are -c and -d and -b and -k and -m and -l and -h and -p
  * Very simple experimental cmdline tool to more easily test stuff
  * will later expand to full scale command line application
  */
@@ -35,13 +35,13 @@ int main(int argc, char **argv) {
 	uint16_t k = 0;
 	uint16_t m = 0;
 	uint64_t bsize = 0;
-	uint32_t nblock = 0;
+	uint16_t il_n = 0;
 	bef_par_t par_t = 0;
 	bef_hash_t hash_t = 0;
 	int ret;
 	int fd;
 
-	while ((opt = getopt(argc, argv, "cdk:m:b:n:p:h:")) != -1) {
+	while ((opt = getopt(argc, argv, "cdk:m:b:l:p:h:")) != -1) {
 		switch(opt) {
 		case 'c':
 			cflag = 1;
@@ -58,8 +58,8 @@ int main(int argc, char **argv) {
 		case 'b':
 			bsize = (uint64_t) strtoll(optarg, NULL, 10);
 			break;
-		case 'n':
-			nblock = (uint32_t) strtol(optarg, NULL, 10);
+		case 'l':
+			il_n = (uint16_t) strtol(optarg, NULL, 10);
 			break;
 		case 'p':
 			if(strcmp(optarg, "jerasure-vand") == 0)
@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
 	if(cflag) {
 		fd = open(argv[optind], O_RDWR | O_CREAT | O_TRUNC, 0644);
 		ret = bef_construct(STDIN_FILENO, fd, par_t, k, m, hash_t,
-				    nblock, bsize);
+				    il_n, bsize);
 		return ret;
 	} else if(dflag) {
 		fd = open(argv[optind], O_RDONLY);

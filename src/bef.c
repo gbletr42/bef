@@ -135,7 +135,7 @@ static uint64_t bef_sky_padding(char *input, size_t inbyte,
 
 ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 {
-	ssize_t ret;
+	ssize_t ret = 1; //Set to > 0 for loop
 	size_t inbyte;
 	size_t offset = 0;
 
@@ -665,6 +665,12 @@ int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
 	/* Not enough fragments */
 	if(frag_len < k)
 		return -BEF_ERR_NEEDMORE;
+	else if(frag_len == 0)
+		return -BEF_ERR_INVALINPUT;
+
+	/* All our codes require at least one parity, including BEF_PAR_NONE */
+	if(m == 0)
+		return -BEF_ERR_INVALINPUT;
 
 	switch(par_t) {
 #ifdef BEF_LIBERASURECODE
@@ -845,13 +851,17 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 		ret = bef_encode_ecc(ibuf + i * fbyte, fbyte, frags,
 				     frags + header.k, &frag_len, header.k,
 				     header.m, header.par_t);
-		if(ret != 0) {
-			for(uint16_t j = i - 1; j > 0; j--)
+
+		/* Free our older arrays, if this isn't the first one */
+		if(ret != 0 && i > 0) {
+			for(uint16_t j = i - 1; j >= 0; j--)
 				bef_encode_free(*(blocks + j),
 						*(blocks + j) + header.k,
 						header.k, header.m);
-			goto out;
 		}
+
+		if(ret != 0)
+			goto out;
 	}
 
 	ret = bef_construct_blocks(obuf, blocks, frag_len, pbyte, header);
@@ -1109,7 +1119,7 @@ static int bef_deconstruct_block(char *ibuf, char **obuf, size_t *obuf_s,
 	ret = bef_decode_ecc(buf_arr, header.k, frag_b, &output,
 			     &onbyte, header.k, header.m, header.par_t);
 	if(ret != 0)
-		goto decode_cleanup;
+		goto out;
 
 	/* Allocate our output buffer, if not already allocated */
 	if(*obuf_s == 0) {
@@ -1121,7 +1131,6 @@ static int bef_deconstruct_block(char *ibuf, char **obuf, size_t *obuf_s,
 	memcpy(*obuf + block_num * onbyte,
 	       output, onbyte);
 
-decode_cleanup:
 	bef_decode_free(output);
 out:
 	bef_deconstruct_free(buf_arr, header.k + header.m);
@@ -1136,8 +1145,8 @@ int bef_deconstruct(int input, int output)
 	int ret;
 	ssize_t bret;
 	struct bef_real_header header;
-	char *ibuf;
-	char *obuf;
+	char *ibuf = NULL;
+	char *obuf = NULL;
 	size_t ibuf_s;
 	size_t obuf_s = 0; //Not known yet
 	uint64_t pbyte = 0;
@@ -1192,5 +1201,7 @@ int bef_deconstruct(int input, int output)
 	}
 
 out:
+	free(obuf);
+	free(ibuf);
 	return ret;
 }

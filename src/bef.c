@@ -1086,7 +1086,7 @@ static int bef_deconstruct_block(char *ibuf, char **obuf, size_t *obuf_s,
 		}
 
 		/* Set pbyte if found */
-		if(frag_h.pbyte > 0)
+		if(frag_h.pbyte > 0 && *pbyte == 0)
 			*pbyte = frag_h.pbyte;
 	}
 

@@ -844,6 +844,9 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 
 	ret = bef_construct_blocks(obuf, blocks, frag_len, pbyte, header);
 
+	for(uint16_t i = 0; i < header.il_n; i++)
+		bef_encode_free(*(blocks + i), *(blocks + i) + header.k,
+				header.k, header.m);
 out:
 	bef_construct_free(blocks, header.il_n);
 	return ret;

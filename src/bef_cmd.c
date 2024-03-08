@@ -138,12 +138,12 @@ int main(int argc, char **argv) {
 			break;
 		case 'b':
 			bsize = (uint64_t) strtoll(optarg, &suffix, 10);
+			bsize *= bef_convert_suffix(suffix);
 			if((bsize == UINT64_MAX || bsize == 0) &&
 			   errno == ERANGE) {
 				perror("Input a proper value for bsize!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
-			bsize *= bef_convert_suffix(suffix);
 			break;
 		case 'l':
 			tmp = (uint64_t) strtol(optarg, NULL, 10);

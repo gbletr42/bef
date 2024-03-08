@@ -44,12 +44,15 @@ This has some current limitations in design.
 So in general, if these problems persist in the future, I'd recommend another solution if any of them impact you.
 
 # Future plans
-- Refactoring of code to be more extensible and readable
+- ~~Refactoring of code to be more extensible and readable~~
 - Addition of extensive error handling, rather than the current give up and return approach
 - ~~Addition of builtin Reed-Solomon code, so liberasurecode is not a hard dependency~~
-- Modification of format to include interleaving of data fragments
-- If possible, a better way to scramble parity fragments that doesn't require lots of seeks or lots of memory
-- Treating FIFOs, pipes, and regular files differently
+- ~~Modification of format to include interleaving of data fragments~~
+- ~~If possible, a better way to scramble parity fragments that doesn't require lots of seeks or lots of memory~~ (This use case is now provided by convolutional coding, so yes there _was_ a better way)
+- ~~Treating FIFOs, pipes, and regular files differently~~ (we don't need to with the new code, it only cares about whether it read or wrote)
+- A usable and capable command line interface
+
+Almost there to 0.1! Soon I'll be rid of that nasty disclaimer and be able to shill this software!
 
 # End Goals
 An extensible, fast, and useable file utility to encode and decode erasure coded streams of data. If possible, also to extend the format into a useable block device, to serve as a cheap ward against corruption on filesystems, but that's way far in the future and may not happen.

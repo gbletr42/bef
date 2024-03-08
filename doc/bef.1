@@ -9,7 +9,7 @@ bef \- An extensible, fast, and useable file utility to encode and decode erasur
 bef [OPTIONS] -i [INPUT] -o [OUTPUT]
 .P
 .SH "DESCRIPTION"
-bef is an extensible, simple, modular, and fast file utility that creates streams of interleaved erasure coded data. It is designed to be an easy to use replacement to existing software packages such as par2cmdline and zfec. It is designed to be streamable and has a simple command line interface to encode/construct and decode/deconstruct erasure coded streams into a simple file with minimal overhead.
+bef is an extensible, simple, modular, and fast file utility that creates streams of interleaved erasure coded data. It is designed to be an easy to use replacement to existing software packages such as par2cmdline and zfec. It is designed to be streamable and has an intuitive command line interface to encode/construct and decode/deconstruct erasure coded streams into a file with minimal overhead.
 .P
 It is designed around the concept blocks of data, of determinate size, which are then subdivided into k block fragments and fed to a parity library backend that gives back k data fragments and m parity fragments. These fragments are then hashed and interleaved with some number of other fragments from other blocks. This is designed with minimal metadata and complexity such that it can be streamed to and fro, with us only needing at least n blocks worth of memory at a time. A simple diagram of the format is below.
 .P
@@ -69,7 +69,7 @@ intel-vand: The Vandermonde Reed Solomon implementation offered by Intel's ISA-L
 .IP
 intel-cauchy: The Cauchy Reed Solomon implementation offered by Intel's ISA-L, provided by liberasurecode
 .IP
-fec-vand: The Vandermonde Reed Solomon implementation offered by zfec's modifiedlibfec library. Extremely fast and scales well.
+fec-vand: The Vandermonde Reed Solomon implementation offered by zfec's modified libfec library. Extremely fast and scales well.
 .TP
 \fB\-H\fR, \fB\-\-hash-type\fR
 The specific hash backend type to use to compute the fragment and header hashes. At this moment, the size of these hashes are at most 256 bits. The options are below, and the default is xxhash as it is exceptionally fast. If one desires cryptographic security against evil corruption, then the best recommendation is either BLAKE3 for a good compromise on speed or SHA256

@@ -1168,7 +1168,7 @@ int bef_deconstruct(int input, int output)
 		return -BEF_ERR_INVALINPUT;
 
 	/* Allocate our buffers */
-	ibuf_s = (header.k + header.m) * header.il_n * header.nbyte;
+	ibuf_s = (header.k + header.m) * header.nbyte * header.il_n;
 	ibuf = bef_malloc(ibuf_s);
 
 	/* Another eternal read loop incoming */

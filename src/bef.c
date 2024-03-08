@@ -46,6 +46,8 @@
 #define BEF_SAFE_READ	0
 #define BEF_SAFE_WRITE	1
 
+#define BEF_PIPE_BUF	65535 //One less than full pipe
+
 /* Struct for libfec header */
 struct bef_fec_header {
 	uint32_t block_num;
@@ -134,21 +136,35 @@ static uint64_t bef_sky_padding(char *input, size_t inbyte,
 ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 {
 	ssize_t ret;
+	size_t inbyte;
+	size_t offset = 0;
 
-	if(flag == BEF_SAFE_READ)
-		ret = read(fd, buf, nbyte);
+	if(fd == STDIN_FILENO || fd == STDOUT_FILENO || fd == STDERR_FILENO)
+		inbyte = BEF_PIPE_BUF;
 	else
-		ret = write(fd, buf, nbyte);
+		inbyte = nbyte;
 
-	/* Keep trying if interrupted or told to try again */
-	while(ret == -1 && (errno == EAGAIN || errno == EINTR)) {
+	/* Keep trying if interrupted or told to try again, or if buffer is not
+	 * full
+	 */
+	while((ret == -1 && (errno == EAGAIN || errno == EINTR)) ||
+	      (offset != nbyte && ret > 0)) {
 		if(flag == BEF_SAFE_READ)
-			ret = read(fd, buf, nbyte);
+			ret = read(fd, buf + offset, inbyte);
 		else
-			ret = write(fd, buf, nbyte);
+			ret = write(fd, buf + offset, inbyte);
+
+		if(ret > 0) {
+			offset += (size_t) ret;
+			if(nbyte - offset < inbyte)
+				inbyte = nbyte - offset;
+		}
 	}
 
-	return ret; //If erred with -1, it'll still return -1
+	if(ret == -1)
+		offset = -1; //If erred with -1, it'll still return -1
+
+	return offset;
 }
 
 /* Both header and frag headers MUST BE LITTLE ENDIAN!!!!! */
@@ -710,7 +726,7 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 	 * fine!
 	 */
 	rret = bef_safe_rw(input, ibuf, ibuf_s, BEF_SAFE_READ);
-	if(rret == -1) {
+	if(rret == -1 || rret == 0) {
 		ret = -BEF_ERR_READERR;
 		goto out;
 	}
@@ -720,7 +736,7 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 
 	*lret = (size_t) rret;
 
-	if(rret > ibuf_s / il_n)
+	if(rret != ibuf_s / il_n)
 		rret = ibuf_s / il_n; //Set to size of one block
 
 	ret = bef_encode_ecc(ibuf, rret, data, parity, &frag_len, k, m,
@@ -1135,8 +1151,14 @@ int bef_deconstruct(int input, int output)
 	if(ret != 0)
 		goto out;
 
-	if(header.k == 0 || header.nbyte == 0)
-		return -BEF_ERR_INVALINPUT; //Header okay, input? Not so much.
+	if(header.k == 0)
+		return -BEF_ERR_INVALINPUT;
+	if(header.nbyte == 0)
+		return -BEF_ERR_INVALINPUT;
+	if(header.il_n == 0)
+		return -BEF_ERR_INVALINPUT;
+	if(header.m == 0)
+		return -BEF_ERR_INVALINPUT;
 
 	/* Allocate our buffers */
 	ibuf_s = (header.k + header.m) * header.il_n * header.nbyte;

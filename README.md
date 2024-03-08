@@ -49,7 +49,7 @@ So in general, if these problems persist in the future, I'd recommend another so
 - ~~Addition of builtin Reed-Solomon code, so liberasurecode is not a hard dependency~~
 - ~~Modification of format to include interleaving of data fragments~~
 - ~~If possible, a better way to scramble parity fragments that doesn't require lots of seeks or lots of memory~~ (This use case is now provided by convolutional coding, so yes there _was_ a better way)
-- ~~Treating FIFOs, pipes, and regular files differently~~ (we don't need to with the new code, it only cares about whether it read or wrote)
+- ~~Treating FIFOs, pipes, and regular files differently~~
 - A usable and capable command line interface
 
 Almost there to 0.1! Soon I'll be rid of that nasty disclaimer and be able to shill this software!

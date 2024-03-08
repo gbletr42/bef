@@ -139,7 +139,8 @@ ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 	size_t inbyte;
 	size_t offset = 0;
 
-	if(fd == STDIN_FILENO || fd == STDOUT_FILENO || fd == STDERR_FILENO)
+	if(nbyte > BEF_PIPE_BUF &&
+	   (fd == STDIN_FILENO || fd == STDOUT_FILENO || fd == STDERR_FILENO))
 		inbyte = BEF_PIPE_BUF;
 	else
 		inbyte = nbyte;
@@ -332,26 +333,6 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 #endif
 	case BEF_HASH_XXHASH:
 		ret = bef_digest_xxhash(input, nbyte, output);
-		break;
-	default:
-		ret = -BEF_ERR_INVALINPUT;
-		break;
-	}
-
-	return ret;
-}
-
-static int bef_get_backend(bef_par_t par_t)
-{
-	int ret;
-
-	switch(par_t) {
-	case BEF_PAR_J_V_RS:
-	case BEF_PAR_J_C_RS:
-	case BEF_PAR_LE_V_RS:
-	case BEF_PAR_I_V_RS:
-	case BEF_PAR_I_C_RS:
-		ret = BEF_BACKEND_LIBERASURECODE;
 		break;
 	default:
 		ret = -BEF_ERR_INVALINPUT;
@@ -703,25 +684,20 @@ void bef_decode_free(char *output)
 }
 
 static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
-				bef_par_t par_t, uint16_t k, uint16_t m,
-				uint16_t il_n, bef_hash_t hash_t,
 				uint64_t bsize, size_t *lret,
 				struct bef_header *header)
 {
 	int ret;
 	ssize_t rret;
+	uint16_t k = header->header.k;
+	uint16_t m = header->header.m;
 	char **data = bef_malloc(k * sizeof(*data));
 	char **parity = bef_malloc(m * sizeof(*parity));
 	size_t frag_len;
 
 	/* Our lovely, sexy, beautiful magic number */
 	memcpy(header->magic, bef_magic, 7);
-	header->header.par_t = par_t;
-	header->header.k = k;
-	header->header.m = m;
-	header->header.hash_t = hash_t;
-	header->hash_t = hash_t;
-	header->header.il_n = il_n;
+	header->hash_t = header->header.hash_t;
 
 	/* To get nbyte, which depends on the backend used, we are going to
 	 * construct the first block twice (so I don't have to lug around a
@@ -736,15 +712,16 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 	}
 
 	/* Pad out if necessary */
-	bef_sky_padding(ibuf, (size_t) rret, il_n, k, bsize);
+	bef_sky_padding(ibuf, (size_t) rret, header->header.il_n,
+			header->header.k, bsize);
 
 	*lret = (size_t) rret;
 
-	if(rret != ibuf_s / il_n)
-		rret = ibuf_s / il_n; //Set to size of one block
+	if(rret != ibuf_s / header->header.il_n)
+		rret = ibuf_s / header->header.il_n; //Set to size of one block
 
-	ret = bef_encode_ecc(ibuf, rret, data, parity, &frag_len, k, m,
-			     par_t);
+	ret = bef_encode_ecc(ibuf, rret, data, parity, &frag_len,
+			     k, m, header->header.par_t);
 	if(ret != 0)
 		goto out;
 
@@ -755,7 +732,7 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 
 	/* let's now compute our hash! */
 	ret = bef_digest((char *) &(header->header), sizeof(header->header),
-			 header->hash, hash_t);
+			 header->hash, header->hash_t);
 
 	/* Let's now make our backup header, in case freaky things happen */
 	memcpy(&(header->header_b), &(header->header), sizeof(header->header));
@@ -840,7 +817,7 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 	int ret;
 	char ***blocks;
 	char **frags;
-	size_t frag_len;
+	size_t frag_len = 0;
 	uint64_t pbyte = bef_sky_padding(ibuf, ibuf_s, header.il_n, header.k,
 					 bsize);
 	size_t fbyte = (ibuf_s + pbyte) / header.il_n;
@@ -856,9 +833,9 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 
 		/* Free our older arrays, if this isn't the first one */
 		if(ret != 0 && i > 0) {
-			for(uint16_t j = i - 1; j >= 0; j--)
-				bef_encode_free(*(blocks + j),
-						*(blocks + j) + header.k,
+			for(uint16_t j = i; j > 0; j--)
+				bef_encode_free(*(blocks + j - 1),
+						*(blocks + j - 1) + header.k,
 						header.k, header.m);
 		}
 
@@ -925,47 +902,58 @@ out:
 }
 
 /* Our lovely file constructor! Split in two parts ^_^ */
-int bef_construct(int input, int output,
-		  bef_par_t par_t, uint16_t k, uint16_t m, bef_hash_t hash_t,
-		  uint16_t il_n, uint64_t bsize)
+int bef_construct(int input, int output, uint64_t bsize,
+		  struct bef_real_header header, uint8_t raw_f)
 {
 	int ret;
-	ssize_t wret;
+	ssize_t bret;
 	char *ibuf;
 	size_t ibuf_s;
-	struct bef_header header;
+	struct bef_header head;
 	size_t lret;
 
 	if(bsize == 0)
 		bsize = BEF_BSIZE;
-	if(par_t == 0)
-		par_t = BEF_PAR_DEFAULT;
-	if(hash_t == 0)
-		hash_t = BEF_HASH_DEFAULT;
-	if(k == 0)
-		k = BEF_K_DEFAULT;
-	if(m == 0)
-		m = BEF_M_DEFAULT;
-	if(il_n == 0)
-		il_n = BEF_IL_N_DEFAULT;
+	if(header.par_t == 0)
+		header.par_t = BEF_PAR_DEFAULT;
+	if(header.hash_t == 0)
+		header.hash_t = BEF_HASH_DEFAULT;
+	if(header.k == 0)
+		header.k = BEF_K_DEFAULT;
+	if(header.m == 0)
+		header.m = BEF_M_DEFAULT;
+	if(header.il_n == 0)
+		header.il_n = BEF_IL_N_DEFAULT;
 
 	/* Estimate size of our shared input buffer, using bsize and k */
-	ibuf_s = il_n * (bsize + (k - bsize % k));
-	ibuf = bef_malloc(sizeof(*ibuf) * ibuf_s);
+	ibuf_s = header.il_n * (bsize + (header.k - bsize % header.k));
+	ibuf = bef_malloc(ibuf_s);
 
-	ret = bef_construct_header(input, ibuf, ibuf_s, par_t, k, m, il_n,
-				   hash_t, bsize, &lret, &header);
-	if(ret != 0)
-		return ret;
+	head.header = header;
 
-	/* Write our header to output */
-	wret = write(output, &header, sizeof(header));
-	if(wret != sizeof(header))
-		return -BEF_ERR_WRITEERR;
+	if(raw_f == 0) {
+		ret = bef_construct_header(input, ibuf, ibuf_s, bsize, &lret,
+					   &head);
+		if(ret != 0)
+			return ret;
+
+		/* Write our header to output */
+		bret = write(output, &head, sizeof(head));
+		if(bret != sizeof(head))
+			return -BEF_ERR_WRITEERR;
+	} else {
+		bret = bef_safe_rw(input, ibuf, ibuf_s, BEF_SAFE_READ);
+		if(bret == -1)
+			return -BEF_ERR_READERR;
+		lret = (size_t) bret;
+	}
+
+	if(head.header.nbyte == 0)
+		return -BEF_ERR_INVALINPUT;
 
 	/* ibuf should be freed by this function, so no need to check */
 	ret = bef_construct_encode(input, output, ibuf, bsize, lret,
-				   header.header);
+				   head.header);
 	if(ret != 0)
 		return ret;
 
@@ -1142,30 +1130,47 @@ out:
 /* Surprisingly simpler than encoding, but still takes up a far too many lines
  * of code
  */
-int bef_deconstruct(int input, int output)
+int bef_deconstruct(int input, int output, struct bef_real_header header,
+		    uint8_t raw_f)
 {
 	int ret;
 	ssize_t bret;
-	struct bef_real_header header;
 	char *ibuf = NULL;
 	char *obuf = NULL;
 	size_t ibuf_s;
 	size_t obuf_s = 0; //Not known yet
 	uint64_t pbyte = 0;
 
-	/* Get our header and verify its sanity */
-	ret = bef_deconstruct_header(input, &header);
-	if(ret != 0)
-		goto out;
+	if(raw_f == 0) {
+		/* Get our header and verify its sanity */
+		ret = bef_deconstruct_header(input, &header);
+		if(ret != 0)
+			goto out;
 
-	if(header.k == 0)
-		return -BEF_ERR_INVALINPUT;
-	if(header.nbyte == 0)
-		return -BEF_ERR_INVALINPUT;
-	if(header.il_n == 0)
-		return -BEF_ERR_INVALINPUT;
-	if(header.m == 0)
-		return -BEF_ERR_INVALINPUT;
+		if(header.k == 0)
+			return -BEF_ERR_INVALINPUT;
+		if(header.nbyte == 0)
+			return -BEF_ERR_INVALINPUT;
+		if(header.il_n == 0)
+			return -BEF_ERR_INVALINPUT;
+		if(header.m == 0)
+			return -BEF_ERR_INVALINPUT;
+		if(header.par_t == 0)
+			return -BEF_ERR_INVALINPUT;
+		if(header.hash_t == 0)
+			return -BEF_ERR_INVALINPUT;
+	} else {
+		if(header.k == 0)
+			header.k = BEF_K_DEFAULT;
+		if(header.m == 0)
+			header.m = BEF_M_DEFAULT;
+		if(header.il_n == 0)
+			header.il_n = BEF_IL_N_DEFAULT;
+		if(header.par_t == 0)
+			header.par_t = BEF_PAR_DEFAULT;
+		if(header.hash_t == 0)
+			header.hash_t = BEF_HASH_DEFAULT;
+	}
 
 	/* Allocate our buffers */
 	ibuf_s = (header.k + header.m) * header.nbyte * header.il_n;

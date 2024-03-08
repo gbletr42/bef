@@ -44,6 +44,9 @@ Constructs a BEF file from the given input file and outputs it to the given outp
 \fB\-d\fR, \fB\-\-deconstruct\fR, \fB\-\-decode\fR
 Inverse of the above, deconstructs a received BEF file from input and outputs the real data to output.
 .TP
+\fB\-r\fR, \fB\-\-raw\fR
+Enables the special raw mode, which has different behaviors depending on whether \fB\-\-construct\fR or \fB\-\-deconstruct\fR is used with it. If \fB\-\-construct\fR is used, it is functionally the same except is does not write the header to output. If \fB\-\-deconstruct\fR is used, it takes in the given values and doesn't try to read a header. In addition to enabling raw mode, it is necessary to give the fragment size too, such that we know how to read the given stream. Currently there is no user friendly way to get that detail.
+.TP
 \fB\-b\fR, \fB\-\-bsize\fR
 Specifies the block size to be used in construction of a BEF file. The default block size is 65536 bytes.
 .TP

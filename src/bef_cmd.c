@@ -43,6 +43,11 @@ void bef_help() {
 	printf("-c|--construct|--encode		Constructs a new BEF file\n");
 	printf("-d|--deconstruct|--decode	Deconstructs an existing\n");
 	printf("				BEF file\n");
+	printf("-r|--raw			Flag to disable reading\n");
+	printf("				and/or writing the header,\n");
+	printf("				You must provide the\n");
+	printf("				fragment size to this\n");
+	printf("				argument as well\n");
 	printf("-b|--bsize			Block size for the BEF file\n");
 	printf("-k|--data			Number of data fragments\n");
 	printf("				per block\n");
@@ -58,7 +63,7 @@ void bef_help() {
 
 uint64_t bef_convert_suffix(char *suffix)
 {
-	uint64_t ret;
+	uint64_t ret = 1;
 
 	if(strcasecmp(suffix, "K") == 0 || strcasecmp(suffix, "KIB") == 0)
 		ret = BEF_KIB;
@@ -81,12 +86,9 @@ int main(int argc, char **argv) {
 	int opt;
 	int cflag = 0;
 	int dflag = 0;
-	uint16_t k = 0;
-	uint16_t m = 0;
+	int rflag = 0;
+	struct bef_real_header header = {0};
 	uint64_t bsize = 0;
-	uint16_t il_n = 0;
-	bef_par_t par_t = 0;
-	bef_hash_t hash_t = 0;
 	int ret;
 	int input = STDIN_FILENO;
 	int output = STDOUT_FILENO;
@@ -100,6 +102,7 @@ int main(int argc, char **argv) {
 				{"encode", no_argument, 0, 'c'},
 				{"deconstruct", no_argument, 0, 'd'},
 				{"decode", no_argument, 0, 'd'},
+				{"raw", required_argument, 0, 'r'},
 				{"bsize", required_argument, 0, 'b'},
 				{"data", required_argument, 0, 'k'},
 				{"parity", required_argument, 0, 'm'},
@@ -111,87 +114,101 @@ int main(int argc, char **argv) {
 				{0, 0, 0, 0}
 			};
 
-	while ((opt = getopt_long(argc, argv, "hcdk:m:b:l:P:H:i:o:",
+	while ((opt = getopt_long(argc, argv, "hcdr:k:m:b:l:P:H:i:o:",
 				  long_options, &opt_index)) != -1) {
 		switch(opt) {
+		case 'h':
+			bef_help();
+			exit(EXIT_SUCCESS);
+			break;
 		case 'c':
 			cflag = 1;
 			break;
 		case 'd':
 			dflag = 1;
 			break;
+		case 'r':
+			rflag = 1;
+			header.nbyte = (uint64_t) strtoll(optarg, &suffix, 10);
+			if((header.nbyte == UINT64_MAX || header.nbyte == 0) &&
+			   errno == ERANGE) {
+				perror("Input a proper value for -B!\n");
+				exit(-BEF_ERR_INVALINPUT);
+			}
+			header.nbyte *= bef_convert_suffix(suffix);
+			break;
 		case 'k':
 			tmp = (uint64_t) strtol(optarg, NULL, 10);
 			if(tmp > UINT16_MAX) {
-				perror("Input a proper value for k!\n");
+				perror("Input a proper value for -k!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
-			k = (uint16_t) tmp;
+			header.k = (uint16_t) tmp;
 			break;
 		case 'm':
 			tmp = (uint64_t) strtol(optarg, NULL, 10);
 			if(tmp > UINT16_MAX) {
-				perror("Input a proper value for m!\n");
+				perror("Input a proper value for -m!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
-			m = (uint16_t) tmp;
+			header.m = (uint16_t) tmp;
 			break;
 		case 'b':
 			bsize = (uint64_t) strtoll(optarg, &suffix, 10);
-			bsize *= bef_convert_suffix(suffix);
 			if((bsize == UINT64_MAX || bsize == 0) &&
 			   errno == ERANGE) {
-				perror("Input a proper value for bsize!\n");
+				perror("Input a proper value for -b!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
+			bsize *= bef_convert_suffix(suffix);
 			break;
 		case 'l':
 			tmp = (uint64_t) strtol(optarg, NULL, 10);
 			if(tmp > UINT16_MAX) {
-				perror("Input a proper value for il_n!\n");
+				perror("Input a proper value for -l!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
-			il_n = (uint16_t) tmp;
+			header.il_n = (uint16_t) tmp;
 			break;
 		case 'P':
 			if(strcmp(optarg, "jerasure-vand") == 0) {
-				par_t = BEF_PAR_J_V_RS;
+				header.par_t = BEF_PAR_J_V_RS;
 			} else if(strcmp(optarg, "jerasure-cauchy") == 0) {
-				par_t = BEF_PAR_J_C_RS;
+				header.par_t = BEF_PAR_J_C_RS;
 			} else if(strcmp(optarg, "liberasurecode-vand") == 0) {
-				par_t = BEF_PAR_LE_V_RS;
+				header.par_t = BEF_PAR_LE_V_RS;
 			} else if(strcmp(optarg, "intel-vand") == 0) {
-				par_t = BEF_PAR_I_V_RS;
+				header.par_t = BEF_PAR_I_V_RS;
 			} else if(strcmp(optarg, "intel-cauchy") == 0) {
-				par_t = BEF_PAR_I_C_RS;
+				header.par_t = BEF_PAR_I_C_RS;
 			} else if(strcmp(optarg, "fec-vand") == 0) {
-				par_t = BEF_PAR_F_V_RS;
+				header.par_t = BEF_PAR_F_V_RS;
 			} else {
-				perror("Input a proper value for P!\n");
+				perror("Input a proper value for -P!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
 			break;
 		case 'H':
 			if(strcmp(optarg, "none") == 0) {
-				hash_t = BEF_HASH_NONE;
+				header.hash_t = BEF_HASH_NONE;
 			} else if(strcmp(optarg, "sha1") == 0) {
-				hash_t = BEF_HASH_SHA1;
+				header.hash_t = BEF_HASH_SHA1;
 			} else if(strcmp(optarg, "sha256") == 0) {
-				hash_t = BEF_HASH_SHA256;
+				header.hash_t = BEF_HASH_SHA256;
 			} else if(strcmp(optarg, "sha3") == 0) {
-				hash_t = BEF_HASH_SHA3;
+				header.hash_t = BEF_HASH_SHA3;
 			} else if(strcmp(optarg, "blake2s") == 0) {
-				hash_t = BEF_HASH_BLAKE2S;
+				header.hash_t = BEF_HASH_BLAKE2S;
 			} else if(strcmp(optarg, "blake3") == 0) {
-				hash_t = BEF_HASH_BLAKE3;
+				header.hash_t = BEF_HASH_BLAKE3;
 			} else if(strcmp(optarg, "md5") == 0) {
-				hash_t = BEF_HASH_MD5;
+				header.hash_t = BEF_HASH_MD5;
 			} else if(strcmp(optarg, "crc32") == 0) {
-				hash_t = BEF_HASH_CRC32;
+				header.hash_t = BEF_HASH_CRC32;
 			} else if(strcmp(optarg, "xxhash") == 0) {
-				hash_t = BEF_HASH_XXHASH;
+				header.hash_t = BEF_HASH_XXHASH;
 			} else {
-				perror("Input a proper value for H!\n");
+				perror("Input a proper value for -H!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
 			break;
@@ -200,10 +217,6 @@ int main(int argc, char **argv) {
 			break;
 		case 'o':
 			output = open(optarg, O_RDWR | O_CREAT | O_TRUNC, 0644);
-			break;
-		case 'h':
-			bef_help();
-			exit(EXIT_SUCCESS);
 			break;
 		default:
 			perror("Unknown option\n");
@@ -217,11 +230,10 @@ int main(int argc, char **argv) {
 	}
 
 	if(cflag) {
-		ret = bef_construct(input, output, par_t, k, m, hash_t,
-				    il_n, bsize);
+		ret = bef_construct(input, output, bsize, header, rflag);
 		return ret;
 	} else if(dflag) {
-		ret = bef_deconstruct(input, output);
+		ret = bef_deconstruct(input, output, header, rflag);
 		return ret;
 	}
 }

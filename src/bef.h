@@ -78,10 +78,6 @@ static const char *bef_magic = "BEFBABE";
 /* Max hash size in header in bytes */
 #define BEF_HASH_SIZE 32
 
-/* Our various backends */
-#define BEF_BACKEND_LIBERASURECODE	1
-#define	BEF_BACKEND_LIBFEC		2
-
 /* Our various hash types */
 #define BEF_HASH_NONE		1 //Living life dangerously
 #define BEF_HASH_SHA1		2
@@ -112,20 +108,6 @@ static const char *bef_magic = "BEFBABE";
  */
 #define BEF_PAR_DEFAULT	BEF_PAR_F_V_RS
 
-/* Our convolutional code types, currently just Voyager code
- */
-#define BEF_CONV_NONE		1 //No convolutional code, default
-#define	BEF_CONV_VOYAGER	2 //r=1/2, k=7, used on Voyager Missions
-
-/* In general, most systems protect against random noise, HDDs and SSDs both
- * have ECCs, Ethernet has CRC32, TCP and UDP both have XOR checksums, etc. It
- * would be rare to need protection against random noise in today's world,
- * unless you're transmitting over a noisy link without good retransmission
- * abilities, such as in radio telecommunications. If so, you can set to use
- * convolutional codes to optionally protect against random noise.
- */
-#define BEF_CONV_DEFAULT	BEF_CONV_NONE
-
 /* Special flags that modify the behavior of the format. Currently there is
  * support for up to 64 flags. This is to enable support for future features not
  * yet implemented.
@@ -135,7 +117,6 @@ static const char *bef_magic = "BEFBABE";
 /* Custom types */
 typedef uint8_t bef_hash_t;
 typedef uint8_t bef_par_t;
-typedef uint8_t bef_conv_t;
 
 /* Our real header, contains all necessary info. Padding is deliberately large
  * enough to allow for future additions to the format while keeping
@@ -148,9 +129,8 @@ struct bef_real_header {
 	uint16_t	m; //Total number of parity fragments per block
 	uint16_t	il_n; //Number of blocks to interleave
 	bef_par_t	par_t; //Parity type for all blocks
-	bef_conv_t	conv_t; //Convolutional code type for all blocks
 	bef_hash_t	hash_t; //Copy of bef_header's hash_t
-	uint8_t		padding[39];
+	uint8_t		padding[40];
 };
 
 /* Our sexy header, total overhead is now forever 168 bytes */
@@ -212,15 +192,8 @@ int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
 void bef_decode_free(char *output);
 
 /* Main Function that takes in a fileno and outputs in another given fileno the
- * formatted file. Also given are the options for the construction, the parity
- * type and amount thereof, hash type, segment and desired block size (will
- * attempt to approximate).
- *
- * If nblock is 0, there will only be one segment with an unlimited number of
- * blocks. Do note that segments are fantastical constructions aren't actually
- * represented in the metadata, so there can thereotically be an unlimited
- * number of segments, each with their own independent erasure codes, each of
- * approximate size num_blocks * bsize (real size is determined at creation).
+ * formatted file. It is given a header containing necessary options as well as
+ * a block size.
  *
  * If bsize is set to 0, it will default to BEF_BSIZE
  *
@@ -233,26 +206,21 @@ void bef_decode_free(char *output);
  *
  * If il_n is set to 0, it will default to BEF_IL_N_DEFAULT
  *
+ * If raw_f is NOT set to 0, it will write out a valid header to output,
+ * otherwise it will just jump to generating the raw stream.
+ *
  * error codes not yet defined, but will return 0 when successful
  */
-int bef_construct(int input, int output,
-		  bef_par_t par_t, uint16_t k, uint16_t m, bef_hash_t hash_t,
-		  uint16_t il_n, uint64_t bsize);
+int bef_construct(int input, int output, uint64_t bsize,
+		  struct bef_real_header header, uint8_t raw_f);
 
-/* Main function that does the inverse of the above function, it decodes my
- * shitty format into usable data again. Comparatively speaking at least, it has
- * a much nicer function call than the other one. Unlike the above, there are no
- * options for deconstruction at the moment, it just werks.
- *
- * Like the construct method, my file format has the sorry limitation of needing
- * to be seekable to work, and as such you _cannot_ use STDIN as the input. Work
- * may be done in the future to support an alternative deconstruction mode that
- * blocks until it finds the required parity fragment, but as of now it'll just
- * not werk if given STDIN due to it's assumption.
- *
- * error codes not yet defined, but will return 0 when successful
+/* Main function that does the inverse of the above. Takes in a given input and
+ * output, as well as a header struct and the raw flag. If the raw flag is not
+ * set to 0, it will use the values in the header struct, otherwise it'll ignore
+ * them and read the header from the input.
  */
-int bef_deconstruct(int input, int output);
+int bef_deconstruct(int input, int output, struct bef_real_header header,
+		    uint8_t raw_f);
 
 /* Memory-related boilerplate functions, crashes when out of memory */
 void *bef_malloc(size_t sz);

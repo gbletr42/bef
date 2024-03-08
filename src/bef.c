@@ -170,7 +170,6 @@ ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 /* Both header and frag headers MUST BE LITTLE ENDIAN!!!!! */
 static void bef_prepare_header(struct bef_real_header *header)
 {
-	header->seed = htole32(header->seed);
 	header->k = htole16(header->k);
 	header->m = htole16(header->m);
 	header->nbyte = htole64(header->nbyte);
@@ -184,7 +183,6 @@ static void bef_prepare_frag_header(struct bef_frag_header *header)
 
 static void bef_unprepare_header(struct bef_real_header *header)
 {
-	header->seed = le32toh(header->seed);
 	header->k = le16toh(header->k);
 	header->m = le16toh(header->m);
 	header->nbyte = le64toh(header->nbyte);
@@ -710,8 +708,6 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 
 	/* Our lovely, sexy, beautiful magic number */
 	memcpy(header->magic, bef_magic, 7);
-	/* Generate our seed for our reproducible hash table */
-	getrandom(&(header->header.seed), sizeof(header->header.seed), 0);
 	header->header.par_t = par_t;
 	header->header.k = k;
 	header->header.m = m;

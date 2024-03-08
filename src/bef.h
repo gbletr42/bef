@@ -144,14 +144,13 @@ typedef uint8_t bef_conv_t;
 struct bef_real_header {
 	uint64_t	flags; //Special flags
 	uint64_t	nbyte; //Total number of bytes in each fragment
-	uint32_t	seed; //Random seed for parity shuffling
 	uint16_t	k; //Total number of data fragments per block
 	uint16_t	m; //Total number of parity fragments per block
 	uint16_t	il_n; //Number of blocks to interleave
 	bef_par_t	par_t; //Parity type for all blocks
 	bef_conv_t	conv_t; //Convolutional code type for all blocks
 	bef_hash_t	hash_t; //Copy of bef_header's hash_t
-	uint8_t		padding[35];
+	uint8_t		padding[39];
 };
 
 /* Our sexy header, total overhead is now forever 168 bytes */

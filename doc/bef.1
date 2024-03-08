@@ -1,0 +1,105 @@
+.TH "bef" "1" "8 Mar 2024" "bef v0.04" "User Commands"
+.P
+.SH "NAME"
+bef \- An extensible, fast, and useable file utility to encode and decode erasure coded streams of data.
+.P
+.SH "SYNOPSIS"
+.P
+.nf
+bef [OPTIONS] -i [INPUT] -o [OUTPUT]
+.P
+.SH "DESCRIPTION"
+bef is an extensible, simple, modular, and fast file utility that creates streams of interleaved erasure coded data. It is designed to be an easy to use replacement to existing software packages such as par2cmdline and zfec. It is designed to be streamable and has a simple command line interface to encode/construct and decode/deconstruct erasure coded streams into a simple file with minimal overhead.
+.P
+It is designed around the concept blocks of data, of determinate size, which are then subdivided into k block fragments and fed to a parity library backend that gives back k data fragments and m parity fragments. These fragments are then hashed and interleaved with some number of other fragments from other blocks. This is designed with minimal metadata and complexity such that it can be streamed to and fro, with us only needing at least n blocks worth of memory at a time. A simple diagram of the format is below.
+.P
+[B1-F1] -> [B2-F1] -> [B3-F1] -> [B1-F2] -> [...]
+.P
+The utility is extremely fast in its default settings, computing around ~500MiB/s on a i5-7300U CPU on a laptop.
+.P
+.SH "OPTIONS"
+.SS "Byte Suffixes"
+Options that require a number of bytes support byte suffixes. Shortened suffixes, like 'K', 'M', and 'G' default to the IEC power of two suffixes.
+.TP
+\fBKiB\fR indicates 1024 bytes
+.TP
+\fBKB\fR indicates 1000 bytes
+.TP
+\fBMiB\fR indicates 1024^2 bytes
+.TP
+\fBMB\fR indicates 1000^2 bytes
+.TP
+\fBGiB\fR indicates 1024^3 bytes
+.TP
+\fBGB\fR indicates 1000^3 bytes
+.SS "Options"
+Generally, any option with a integer argument can be passed 0 or not passed at all to get the default values.
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Prints a helpful help message when this manpage is not available to read.
+.TP
+\fB\-c\fR, \fB\-\-construct\fR, \fB\-\-encode\fR
+Constructs a BEF file from the given input file and outputs it to the given output file.
+.TP
+\fB\-d\fR, \fB\-\-deconstruct\fR, \fB\-\-decode\fR
+Inverse of the above, deconstructs a received BEF file from input and outputs the real data to output.
+.TP
+\fB\-b\fR, \fB\-\-bsize\fR
+Specifies the block size to be used in construction of a BEF file. The default block size is 65536 bytes.
+.TP
+\fB\-k\fR, \fB\-\-data\fR
+The number of data fragments to split the block size into. The default number of data fragments is 15.
+.TP
+\fB\-m\fR, \fB\-\-parity\fR
+The number of parity fragments to create in redundancy to the data fragments. The default number of parity fragments is 1.
+.TP
+\fB\-l\fR, \fB\-\-interleave\fR
+The number of blocks (specifically their fragments) to interleave. The default number is 3, as it provides protection for a bad burst to corrupt both the block in front of and behind it.
+.TP
+\fB\-P\fR, \fB\-\-parity-type\fR
+The specific parity backend type to use to compute the erasure codes. Options are below. Default is fec-vand, as it is fast in almost all cases and allows up to 256 fragments.
+.IP
+jerasure-vand: The Vandermonde Reed Solomon implementation from libJerasure, provided by liberasurecode
+.IP
+jerasure-cauchy: The Cauchy Reed Solomon implementation from libJerasure, provided by liberasurecode
+.IP
+liberasurecode-vand: The Vandermonde Reed Solomon implementation offered by liberasurecode, terribly slow and scales terribly in every way, don't use unless necessary
+.IP
+intel-vand: The Vandermonde Reed Solomon implementation offered by Intel's ISA-L, provided by liberasurecode.
+.IP
+intel-cauchy: The Cauchy Reed Solomon implementation offered by Intel's ISA-L, provided by liberasurecode
+.IP
+fec-vand: The Vandermonde Reed Solomon implementation offered by zfec's modifiedlibfec library. Extremely fast and scales well.
+.TP
+\fB\-H\fR, \fB\-\-hash-type\fR
+The specific hash backend type to use to compute the fragment and header hashes. At this moment, the size of these hashes are at most 256 bits. The options are below, and the default is xxhash as it is exceptionally fast. If one desires cryptographic security against evil corruption, then the best recommendation is either BLAKE3 for a good compromise on speed or SHA256
+.IP
+none: No hash, living life dangerously
+.IP
+sha1: Uses the SHA1 hash algorithm, provided by OpenSSL.
+.IP
+sha256: Uses the SHA256 hash algorithm, provided by OpenSSL.
+.IP
+sha3: Uses the SHA3 hash algorithm, provided by OpenSSL.
+.IP
+blake2s: Uses the BLAKE2S hash algorithm, provied by OpenSSL.
+.IP
+blake3: Uses the BLAKE3 hash algorithm, provied by BLAKE3-team's c implementation of BLAKE3
+.IP
+md5: Uses the MD5 hash algorithm, provided by OpenSSL.
+.IP
+crc32: Uses the CRC32 checksum, provided by Zlib.
+.IP
+xxhash: Uses the xxHash hash algorithm, provided by xxHash and a mandatory dependency.
+.TP
+\fB\-i\fR, \fB\-\-input\fR
+The given input file to read from. If none are given, then by default it will read from STDIN.
+.TP
+\fB\-o\fR, \fB\-\-output\fR
+The given output file to write to. If none are given, then by default it will write to STDOUT. Warning, by default the file given will be truncated.
+.SH "SEE ALSO"
+\fBpar2cmdline\fR(1)
+.SH "BUGS"
+Report bugs at: https://github.com/gbletr42/bef/issues
+.SH "AUTHOR"
+gbletr42

@@ -154,7 +154,7 @@ struct bef_real_header {
 	uint8_t		padding[35];
 };
 
-/* Our sexy header, total overhead is now forever 161 bytes */
+/* Our sexy header, total overhead is now forever 168 bytes */
 struct bef_header {
 	char			magic[7]; //Our magic number babe ^_^
 	bef_hash_t		hash_t; //hash type for WHOLE FILE

@@ -170,6 +170,7 @@ ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 /* Both header and frag headers MUST BE LITTLE ENDIAN!!!!! */
 static void bef_prepare_header(struct bef_real_header *header)
 {
+	header->flags = htole64(header->flags);
 	header->k = htole16(header->k);
 	header->m = htole16(header->m);
 	header->nbyte = htole64(header->nbyte);
@@ -183,6 +184,7 @@ static void bef_prepare_frag_header(struct bef_frag_header *header)
 
 static void bef_unprepare_header(struct bef_real_header *header)
 {
+	header->flags = le64toh(header->flags);
 	header->k = le16toh(header->k);
 	header->m = le16toh(header->m);
 	header->nbyte = le64toh(header->nbyte);

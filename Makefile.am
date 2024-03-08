@@ -34,3 +34,5 @@ endif
 if LIBERASURECODE
 bef_LDADD += -lerasurecode
 endif
+
+man_MANS = doc/bef.1

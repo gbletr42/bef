@@ -1163,6 +1163,8 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 			header.par_t = BEF_PAR_DEFAULT;
 		if(header.hash_t == 0)
 			header.hash_t = BEF_HASH_DEFAULT;
+		if(header.nbyte == 0)
+			return -BEF_ERR_INVALINPUT;
 	}
 
 	/* Allocate our buffers */

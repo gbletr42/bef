@@ -67,7 +67,7 @@ static const char *bef_magic = "BEFBABE";
 
 /* Default number of blocks to interleave is 3, which with default block size
  * and parities, provides protections for 12KiB burst corruption in the best
- * case and around 4KiB burst corruption in the worst case (it hits both the
+ * case and around 8KiB burst corruption in the worst case (it hits both the
  * fragment behind and in front of it along with decimating the poor original
  * fragment). I feel this is pretty good burst corruption protection, and should
  * serve to protect against at least a bad sector in a 4096-byte sector hard

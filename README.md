@@ -4,6 +4,11 @@
 # Description
 Block Erasure Format is a file utility and file format designed to fix the pain points I've personally had with existing utilities. It has a nice and easy to use interface, at least according to me, it is simple with minimal overhead, and it is very fast. It is also designed to be modular and extensible, with modular hash and parity library backends. The file format is fully streamable, meaning it does not need to have a seekable file to work, so you can just pipe data right in from say tar. It is finally a very small piece of software, only around 1.5 klocs, so it should be readily auditable and forkable.
 
+# What even are erasure codes?
+Erasure codes are a type of error correctiion codes that can be applied to a set of k input symbols (such as k blocks of data) and output k+n output symbols. You can lose any n symbols from the output before you are unable to reconstruct the original input, providing you with significant protection against corruption.
+
+These are used in situations where there can be significant burst corruption, where a large sequential number of bytes are corrupted, and you don't want to lose all your data. Examples of existing technologies that use this are CDs, DVDs, BDs, HDDs, and SSDs, each having failure modes that require it.
+
 # Format
 The format is designed to be simple, although it was quite a bit more complicated earlier in the design process. It is based on the concept of a 'block' of data, which is then split into data and parity fragments by the parity backend. Then these fragments are hashed and interleaved with fragments from n other blocks. A simple diagram is below. M is the last fragment number, which also are the parity fragments.
 

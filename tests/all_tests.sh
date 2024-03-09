@@ -11,11 +11,11 @@ then
 fi
 
 bash prepare_tests.sh
+bash io_test.sh
 bash bsize_test.sh
 bash frag_test.sh
 bash hash_test.sh
 bash interleave_test.sh
-bash io_test.sh
 bash parity_test.sh
 bash cleanup_tests.sh
 

@@ -13,7 +13,7 @@ This format is pretty similar to the one used in CDs, but unlike that standard b
 
 Currently, that is all the information stored in the header, making it only 20 bytes large. However, we want to be able to extend the format in the future and ensure we are getting a good header. So the header has additional operation flags and padding to make it 64 bytes, is duplicated in case it corrupts, and a hash is available to check its integrity. In the worst case, we can omit the header entirely if we already know all information.
 
-I believe this format is, or at least can be with the right settings, highly resisilient to burst corruption. Under default settings, it can handle in the worst case one burst of slightly larger than 4KiB per 128KiB. It is however not resilient to random noise, and will corrupt beyond repair in such environments. Luckily environments with such ambient noise in computing are rare, outside of telecommunications.
+I believe this format is, or at least can be with the right settings, highly resilient to burst corruption. Under default settings, it can handle in the worst case one burst of slightly larger than 4KiB per 128KiB. It is however not resilient to random noise, and will corrupt beyond repair in such environments. Luckily environments with such ambient noise in computing are rare, outside of telecommunications.
 
 # What will it build on?
 I have built and tested it against x86-64 and x86, and the results are that it _seems_ to work on both architectures!
@@ -47,6 +47,6 @@ These benchmarks are done on a Dell Latitude 7490, i5-7300U, 16GB of RAM, . The 
 As one can see, bef is significantly faster than each option except zfec when it comes to decoding a corrupted fragment or two on disk. Par2 is very very slow, and that's very much one of the main reasons I made this software.
 
 # Future Support/Compatibility
-With v0.1, the binary format is now frozen in place and will NEVER change. It can still be extended via use of flags and padding, but it will never be unable to be read by future versions of bef. Thus I guarantee full backwards and partial forward compatibility, with the caveat that since I am not an oracle the forwards compatibility is limited to the subset of features available at that given feature, and thus incompatible with newer features extended to the binary format.
+With v0.1, the binary format is now frozen in place and will NEVER change. It can still be extended via use of flags and padding, but it will never be unable to be read by future versions of bef. Thus I guarantee full backward and partial forward compatibility, with the caveat that, since I am not an oracle, the forward compatibility is limited to the subset of features available at that given version, and thus incompatible with newer features extended to the binary format.
 
 However, the CLI is not frozen in place, but I will try my hardest to never modify, and the internal library API/ABI has no guarantees of any compatibility with any other version.

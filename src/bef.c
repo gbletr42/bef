@@ -1096,13 +1096,12 @@ static int bef_deconstruct_block(char *ibuf, char **obuf, size_t *obuf_s,
 		} else if(ret != 0) {
 				goto out;
 		} else {
+			/* Set pbyte if found */
+			if(frag_h.pbyte > 0 && *pbyte == 0)
+				*pbyte = frag_h.pbyte;
 			memcpy(*(buf_arr + i), ibuf + index + sizeof(frag_h),
 			       frag_b);
 		}
-
-		/* Set pbyte if found */
-		if(frag_h.pbyte > 0 && *pbyte == 0)
-			*pbyte = frag_h.pbyte;
 	}
 
 	/* And now after that digusting loop */

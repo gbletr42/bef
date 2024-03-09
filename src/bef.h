@@ -144,7 +144,7 @@ struct bef_header {
 
 /* Block Header struct, what follows after is the body of the block */
 struct bef_frag_header {
-	uint64_t	pbyte; //Padded bytes for whole file
+	uint64_t	pbyte; //Padded bytes for whole interleaved block
 	uint8_t		hash[BEF_HASH_SIZE]; //hash of whole fragment
 };
 

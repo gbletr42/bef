@@ -107,12 +107,6 @@ void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz)
  * We can do better without sacrificing any of the protective properties of our
  * format with this padding function from the sky.
  *
- * This also has the added benefit of there being one great padding at the end,
- * removing the need for per-fragment padding. However, we don't know how much
- * is here until we get there, so it'll have to stay even though we only need
- * one :(. The horrors of a format that cannot be seekable by design,
- * 8*(k+m)*il_n - 8 wasted bytes.
- *
  * inbyte must obviously be at most il_n * (bsize + (k - bsize % k)), and input
  * must be as large as inbyte.
  *

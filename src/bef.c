@@ -131,7 +131,7 @@ ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 {
 	ssize_t ret = 1; //Set to > 0 for loop
 	size_t inbyte;
-	size_t offset = 0;
+	ssize_t offset = 0;
 
 	if(nbyte > BEF_PIPE_BUF &&
 	   (fd == STDIN_FILENO || fd == STDOUT_FILENO || fd == STDERR_FILENO))
@@ -150,7 +150,11 @@ ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 			ret = write(fd, buf + offset, inbyte);
 
 		if(ret > 0) {
-			offset += (size_t) ret;
+			if(SSIZE_MAX - offset > ret) //to check for overflow
+				offset += ret;
+			else
+				return -1;
+
 			if(nbyte - offset < inbyte)
 				inbyte = nbyte - offset;
 		}

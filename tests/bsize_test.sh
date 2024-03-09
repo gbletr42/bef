@@ -1,11 +1,15 @@
 #!/bin/bash
-#Tests block sizes from 1KiB to 1GiB, power of two
+#Tests block sizes from 1KiB to 1GiB, power of two and power of two plus 1
 
-for bsize in 1K 2K 4K 8K 16K 32K 64K 128K 256K 512K 1M 2M 4M 8M 16M 32M 64M 128M 256M 512M 1G
+for ((bsize = 1024; bsize <= $((1024 * 1024 * 1024)); bsize = bsize * 2))
 do
 	for file in test1 test2 test3
 	do
 		if ! cmp $file <(bef -c -b $bsize -i $file | bef -d)
+		then
+			echo "block size test $bsize on $file failed!"
+		fi
+		if ! cmp $file <(bef -c -b $(($bsize + 1)) -i $file | bef -d)
 		then
 			echo "block size test $bsize on $file failed!"
 		fi

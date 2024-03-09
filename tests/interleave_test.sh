@@ -1,7 +1,7 @@
 #!/bin/bash
-#Tests if it can successfully interleave our files for up to 256 blocks interleaved, power of 2s
+#Tests if it can successfully interleave our files for up to 256 blocks interleaved, power of 2s and power of 2s + 1
 
-for il_n in 1 2 4 8 16 32 64 128 256
+for il_n in 1 2 3 4 5 8 9 16 17 32 33 64 65 128 129 256 257
 do
 	for file in test1 test2 test3
 	do

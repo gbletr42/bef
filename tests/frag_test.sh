@@ -1,10 +1,10 @@
 #!/bin/bash
-#Tests fragment numbers of powers of two from 1 to 128
+#Tests fragment numbers of powers of two from 1 to 128 and that minus 1
 
 
-for k in 1 2 4 8 16 32 64 128
+for k in 1 2 3 4 7 8 15 16 31 32 63 64 127 128
 do
-	for m in 1 2 4 8 16 32 64 128 #Eh do I really want 512G in my tests?
+	for m in 1 2 3 4 7 8 15 16 31 32 63 64 127 128 #Eh do I really want 512G in my tests?
 	do
 		for file in test1 test2 #removed test3 because I *don't want it*
 		do

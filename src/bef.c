@@ -1133,7 +1133,7 @@ out:
 int bef_deconstruct(int input, int output, struct bef_real_header header,
 		    uint8_t raw_f)
 {
-	int ret;
+	int ret = 0;
 	ssize_t bret;
 	char *ibuf = NULL;
 	char *obuf = NULL;

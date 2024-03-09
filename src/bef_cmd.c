@@ -132,7 +132,8 @@ int main(int argc, char **argv) {
 			header.nbyte = (uint64_t) strtoll(optarg, &suffix, 10);
 			if((header.nbyte == UINT64_MAX || header.nbyte == 0) &&
 			   errno == ERANGE) {
-				perror("Input a proper value for -B!\n");
+				fprintf(stderr,
+					"Input a proper value for -B!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
 			header.nbyte *= bef_convert_suffix(suffix);
@@ -140,7 +141,8 @@ int main(int argc, char **argv) {
 		case 'k':
 			tmp = (uint64_t) strtol(optarg, NULL, 10);
 			if(tmp > UINT16_MAX) {
-				perror("Input a proper value for -k!\n");
+				fprintf(stderr,
+					"Input a proper value for -k!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
 			header.k = (uint16_t) tmp;
@@ -148,7 +150,8 @@ int main(int argc, char **argv) {
 		case 'm':
 			tmp = (uint64_t) strtol(optarg, NULL, 10);
 			if(tmp > UINT16_MAX) {
-				perror("Input a proper value for -m!\n");
+				fprintf(stderr,
+					"Input a proper value for -m!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
 			header.m = (uint16_t) tmp;
@@ -157,7 +160,8 @@ int main(int argc, char **argv) {
 			bsize = (uint64_t) strtoll(optarg, &suffix, 10);
 			if((bsize == UINT64_MAX || bsize == 0) &&
 			   errno == ERANGE) {
-				perror("Input a proper value for -b!\n");
+				fprintf(stderr,
+					"Input a proper value for -b!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
 			bsize *= bef_convert_suffix(suffix);
@@ -165,7 +169,8 @@ int main(int argc, char **argv) {
 		case 'l':
 			tmp = (uint64_t) strtol(optarg, NULL, 10);
 			if(tmp > UINT16_MAX) {
-				perror("Input a proper value for -l!\n");
+				fprintf(stderr,
+					"Input a proper value for -l!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
 			header.il_n = (uint16_t) tmp;
@@ -184,7 +189,8 @@ int main(int argc, char **argv) {
 			} else if(strcmp(optarg, "fec-vand") == 0) {
 				header.par_t = BEF_PAR_F_V_RS;
 			} else {
-				perror("Input a proper value for -P!\n");
+				fprintf(stderr,
+					"Input a proper value for -P!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
 			break;
@@ -208,7 +214,8 @@ int main(int argc, char **argv) {
 			} else if(strcmp(optarg, "xxhash") == 0) {
 				header.hash_t = BEF_HASH_XXHASH;
 			} else {
-				perror("Input a proper value for -H!\n");
+				fprintf(stderr,
+					"Input a proper value for -H!\n");
 				exit(-BEF_ERR_INVALINPUT);
 			}
 			break;
@@ -219,13 +226,13 @@ int main(int argc, char **argv) {
 			output = open(optarg, O_RDWR | O_CREAT | O_TRUNC, 0644);
 			break;
 		default:
-			perror("Unknown option\n");
 			break;
 		}
 	}
 
 	if(cflag && dflag) {
-		perror("Can't construct and deconstruct at the same time\n");
+		fprintf(stderr,
+			"Can't construct and deconstruct at the same time\n");
 		exit(-BEF_ERR_INVALINPUT);
 	}
 

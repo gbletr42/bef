@@ -45,3 +45,8 @@ These benchmarks are done on a Dell Latitude 7490, i5-7300U, 16GB of RAM, . The 
 | decode time + corruption (tmpfs) | 1.11s | 1.44s | 19.92s |
 
 As one can see, bef is significantly faster than each option except zfec when it comes to decoding a corrupted fragment or two on disk. Par2 is very very slow, and that's very much one of the main reasons I made this software.
+
+# Future Support/Compatibility
+With v0.1, the binary format is now frozen in place and will NEVER change. It can still be extended via use of flags and padding, but it will never be unable to be read by future versions of bef. Thus I guarantee full backwards and partial forward compatibility, with the caveat that since I am not an oracle the forwards compatibility is limited to the subset of features available at that given feature, and thus incompatible with newer features extended to the binary format.
+
+However, the CLI is not frozen in place, but I will try my hardest to never modify, and the internal library API/ABI has no guarantees of any compatibility with any other version.

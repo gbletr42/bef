@@ -6,7 +6,7 @@ for k in 1 2 4 8 16 32 64 128
 do
 	for m in 1 2 4 8 16 32 64 128
 	do
-		for files in test1 test2 test3
+		for file in test1 test2 test3
 		do
 			if ! cmp $file <(bef -c -k $k -m $m -i $file | bef -d)
 			then

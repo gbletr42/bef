@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <sys/types.h>
+#include <limits.h> //Apparently POSIX has SSIZE_MAX here
 
 /* Our sexy magic number ( ͡° ͜ʖ ͡°) */
 static const char *bef_magic = "BEFBABE";

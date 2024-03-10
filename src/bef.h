@@ -59,6 +59,13 @@ static const char *bef_magic = "BEFBABE";
  */
 #define BEF_BSIZE 65536
 
+/* Default search size in bytes
+ * This is the number of bytes that will be searched for a valid fragment header
+ * both backwards and forwards. Currently set to 64 bytes, so it'll search at
+ * max 128 times before giving up.
+ */
+#define BEF_SBYTE 64
+
 /* Default data and parity fragment ratios, just out of personal preference, I'd
  * like to lose at least 5% of the file on average before I give up and call it
  * quits.
@@ -66,15 +73,13 @@ static const char *bef_magic = "BEFBABE";
 #define BEF_K_DEFAULT	15
 #define BEF_M_DEFAULT	1
 
-/* Default number of blocks to interleave is 3, which with default block size
- * and parities, provides protections for 12KiB burst corruption in the best
- * case and around 8KiB burst corruption in the worst case (it hits both the
- * fragment behind and in front of it along with decimating the poor original
- * fragment). I feel this is pretty good burst corruption protection, and should
- * serve to protect against at least a bad sector in a 4096-byte sector hard
- * disk.
+/* Default number of blocks to interleave is 5, which with default block size
+ * and parities, provides protections for 20KiB burst corruption in the best
+ * case and around 16KiB burst corruption in the worst case. I feel this is
+ * pretty good burst corruption protection, and should serve to protect against
+ * at least a bad sector or two in a 4096-byte sector hard disk.
  */
-#define BEF_IL_N_DEFAULT 3
+#define BEF_IL_N_DEFAULT 5
 
 /* Max hash size in header in bytes */
 #define BEF_HASH_SIZE 32
@@ -143,10 +148,14 @@ struct bef_header {
 	struct bef_real_header	header_b; //backup header
 };
 
-/* Block Header struct, what follows after is the body of the block */
+/* Block Header struct, what follows after is the body of the block
+ * Now twice the size from original at 80 bytes, twice the overhead.
+ */
 struct bef_frag_header {
+	uint64_t	block_num; //block number, necessary for reconstruction
 	uint64_t	pbyte; //Padded bytes for whole interleaved block
-	uint8_t		hash[BEF_HASH_SIZE]; //hash of whole fragment
+	uint8_t		h_hash[BEF_HASH_SIZE]; //hash of fragment header
+	uint8_t		b_hash[BEF_HASH_SIZE]; //hash of fragment body
 };
 
 /* Generalized hash function call, makes life easier. Takes in a given input of

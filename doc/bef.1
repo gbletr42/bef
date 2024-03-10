@@ -38,11 +38,25 @@ Generally, any option with a integer argument can be passed 0 or not passed at a
 \fB\-h\fR, \fB\-\-help\fR
 Prints a helpful help message when this manpage is not available to read.
 .TP
+\fB\-V\fR, \fB\-\-version\fR
+Prints the version of bef.
+.TP
 \fB\-c\fR, \fB\-\-construct\fR, \fB\-\-encode\fR
 Constructs a BEF file from the given input file and outputs it to the given output file.
 .TP
 \fB\-d\fR, \fB\-\-deconstruct\fR, \fB\-\-decode\fR
 Inverse of the above, deconstructs a received BEF file from input and outputs the real data to output.
+.TP
+\fB\-p\fR, \fB\-\-prefix\fR
+Sets the header options to defined presets each suited to a particular use case. This argument, due to getopt, is position dependent such that if you specify it before other argument, you can modify the header options contrary to the preset. This could be useful if you want to modify a portion of the preset, but not specify the whole thing. This does not replace the defaults, those still get applied if you set any option to 0 or omit it.
+.IP
+standard: A preset that mimics the Reed Solomon codes on a Compact Disc. Compact Discs use two interleaved codes, a inner (32, 28) code (k=28, m=4 in our language), and a outer (28, 24) (k=24, m=4). This mimics by choosing the more secure outer code as our parity settings and interleaves it twice (rather than the default 3).
+.IP
+share: A preset made for sharing over the internet. Since there are so many checksums and HMACS in the case of HTTPS, SSL, or other popular encrypted communications, it is highly unlikely significant amounts of corruption will effect you. So the preset has a 1% redundancy rate at k=100, m=1.
+.IP
+archive: A preset made for archiving the data long term. I'd imagine you'd want to lose a significant percentage of the archive and still come out okay. So the redundancy rate is 50% at k=16, m=8, this allows you to lose around 33% of the output and still be able to reconstruct the data faithfully. Likewise, the interleave number is set to 10 blocks, to get the worst case burst size to around 90% of the total size of parity per set of interleaved blocks.
+.IP
+paranoid: A preset made for paranoid archivers. Similar to archive, except it has 100% redundancy (k=16, m=16) and 20 interleaved blocks. This would allow you to corrupt half the output file on average (hopefully not in one burst!) and still be able to recover the original data. The 10 extra interleaved blocks makes the worst case burst size around 95% instead of the 90% in the archive preset, or the ~80% by default.
 .TP
 \fB\-r\fR, \fB\-\-raw\fR
 Enables the special raw mode, which has different behaviors depending on whether \fB\-\-construct\fR or \fB\-\-deconstruct\fR is used with it. If \fB\-\-construct\fR is used, it is functionally the same except is does not write the header to output. If \fB\-\-deconstruct\fR is used, it takes in the given values and doesn't try to read a header. In addition to enabling raw mode, it is necessary to give the fragment size too, such that we know how to read the given stream. Currently there is no user friendly way to get that detail.
@@ -57,7 +71,7 @@ The number of data fragments to split the block size into. The default number of
 The number of parity fragments to create in redundancy to the data fragments. The default number of parity fragments is 1.
 .TP
 \fB\-l\fR, \fB\-\-interleave\fR
-The number of blocks (specifically their fragments) to interleave. The default number is 3, as it provides protection for a bad burst to corrupt both the block in front of and behind it.
+The number of blocks (specifically their fragments) to interleave. The default number is 5, as it makes the worst case burst size around 80% of the total parity size per set of interleaved blocks. 
 .TP
 \fB\-P\fR, \fB\-\-parity-type\fR
 The specific parity backend type to use to compute the erasure codes. Options are below. Default is fec-vand, as it is fast in almost all cases and allows up to 256 fragments.

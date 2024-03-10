@@ -40,9 +40,12 @@ void bef_help() {
 	printf("erasure coded streams. More information can be found in\n");
 	printf("the manpage\n\n");
 	printf("-h|--help			Print this help message\n");
+	printf("-v|--version			Print version of bef\n");
 	printf("-c|--construct|--encode		Constructs a new BEF file\n");
 	printf("-d|--deconstruct|--decode	Deconstructs an existing\n");
 	printf("				BEF file\n");
+	printf("-p|--preset			Set the arguments to a\n");
+	printf("				given preset\n");
 	printf("-r|--raw			Flag to disable reading\n");
 	printf("				and/or writing the header,\n");
 	printf("				You must provide the\n");
@@ -59,6 +62,62 @@ void bef_help() {
 	printf("-H|--hash-type			Hash type for BEF file\n");
 	printf("-i|--input			Input file\n");
 	printf("-o|--output			Output file\n\n");
+}
+
+/* More info for each in the man page */
+int bef_set_preset(struct bef_real_header *header, uint64_t *bsize,
+		   int preset)
+{
+	int ret = 0;
+
+	/* For all of them, block size will be made such as to be equivalent to
+	 * 4KiB per fragment.
+	 */
+	switch(preset) {
+	/* "standard" preset, at the (28,24) reed solomon code used in CDs
+	 * interleaved twice. Not exactly the same as CDs, as our format isn't
+	 * capable of fully mimicing it, but it's close enough.
+	 */
+	case 0:
+		*header->k = 24;
+		*header->m = 4;
+		*header->il_n = 2;
+		*bsize = 4 * 32 * 1024;
+		break;
+	/* share preset, very low redundancy at around 1% (it's going over the
+	 * internet with all those error corrections and likely HMACs ensuring
+	 * good data traversal with SSL, so it's unlikely something'll go wrong
+	 */
+	case 1: //share preset, very low redundancy at around 1%
+		*header->k = 100;
+		*header->m = 1;
+		*bsize = 4 * 101 * 1024;
+		break;
+	/* archive preset, high redundancy at 50% and 10 blocks interleaved so
+	 * that worst case burst is ~90% of total parity.
+	 */
+	case 2:
+		*header->k = 16;
+		*header->m = 8;
+		*header->il_n = 10;
+		*bsize = 4 * 24 * 1024;
+		break;
+	/* paranoid preset, for those who are afraid that the sky'll fall down.
+	 * Very high redundancy at 100% and 20 blocks interleaved so that worst
+	 * case burst is ~95% of total parity.
+	 */
+	case 3:
+		*header->k = 16;
+		*header->m = 16;
+		*header->il_n = 20;
+		*bsize = 4 * 32 * 1024;
+		break;
+	default:
+		ret = -BEF_ERR_INVALINPUT;
+		break;
+	}
+
+	return ret;
 }
 
 uint64_t bef_convert_suffix(char *suffix)
@@ -95,13 +154,16 @@ int main(int argc, char **argv) {
 	int opt_index;
 	uint64_t tmp;
 	char *suffix;
+	int preset;
 	struct option long_options[] =
 			{
 				{"help", no_argument, 0, 'h'},
+				{"version", no_argument, 0, 'V'},
 				{"construct", no_argument, 0, 'c'},
 				{"encode", no_argument, 0, 'c'},
 				{"deconstruct", no_argument, 0, 'd'},
 				{"decode", no_argument, 0, 'd'},
+				{"preset", required_argument, 0, 'p'},
 				{"raw", required_argument, 0, 'r'},
 				{"bsize", required_argument, 0, 'b'},
 				{"data", required_argument, 0, 'k'},
@@ -114,11 +176,15 @@ int main(int argc, char **argv) {
 				{0, 0, 0, 0}
 			};
 
-	while ((opt = getopt_long(argc, argv, "hcdr:k:m:b:l:P:H:i:o:",
+	while ((opt = getopt_long(argc, argv, "hVcdr:k:m:b:l:P:H:i:o:",
 				  long_options, &opt_index)) != -1) {
 		switch(opt) {
 		case 'h':
 			bef_help();
+			exit(EXIT_SUCCESS);
+			break;
+		case 'V':
+			printf("bef version v0.2");
 			exit(EXIT_SUCCESS);
 			break;
 		case 'c':
@@ -126,6 +192,22 @@ int main(int argc, char **argv) {
 			break;
 		case 'd':
 			dflag = 1;
+			break;
+		case 'p':
+			if(strcmp(optarg, "standard") == 0)
+				preset = 0;
+			else if(strcmp(optarg, "share") == 0)
+				preset = 1;
+			else if(strcmp(optarg, "archive") == 0)
+				preset = 2;
+			else if(strcmp(optarg, "paranoid") == 0)
+				preset = 3;
+
+			if(bef_set_preset(&header, &bsize, preset) != 0) {
+				fprintf(stderr,
+					"Input a proper value for -p!\n");
+				exit(-BEF_ERR_INVALINPUT);
+			}
 			break;
 		case 'r':
 			rflag = 1;

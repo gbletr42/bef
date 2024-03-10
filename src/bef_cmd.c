@@ -79,9 +79,9 @@ int bef_set_preset(struct bef_real_header *header, uint64_t *bsize,
 	 * capable of fully mimicing it, but it's close enough.
 	 */
 	case 0:
-		*header->k = 24;
-		*header->m = 4;
-		*header->il_n = 2;
+		header->k = 24;
+		header->m = 4;
+		header->il_n = 2;
 		*bsize = 4 * 32 * 1024;
 		break;
 	/* share preset, very low redundancy at around 1% (it's going over the
@@ -89,17 +89,17 @@ int bef_set_preset(struct bef_real_header *header, uint64_t *bsize,
 	 * good data traversal with SSL, so it's unlikely something'll go wrong
 	 */
 	case 1: //share preset, very low redundancy at around 1%
-		*header->k = 100;
-		*header->m = 1;
+		header->k = 100;
+		header->m = 1;
 		*bsize = 4 * 101 * 1024;
 		break;
 	/* archive preset, high redundancy at 50% and 10 blocks interleaved so
 	 * that worst case burst is ~90% of total parity.
 	 */
 	case 2:
-		*header->k = 16;
-		*header->m = 8;
-		*header->il_n = 10;
+		header->k = 16;
+		header->m = 8;
+		header->il_n = 10;
 		*bsize = 4 * 24 * 1024;
 		break;
 	/* paranoid preset, for those who are afraid that the sky'll fall down.
@@ -107,9 +107,9 @@ int bef_set_preset(struct bef_real_header *header, uint64_t *bsize,
 	 * case burst is ~95% of total parity.
 	 */
 	case 3:
-		*header->k = 16;
-		*header->m = 16;
-		*header->il_n = 20;
+		header->k = 16;
+		header->m = 16;
+		header->il_n = 20;
 		*bsize = 4 * 32 * 1024;
 		break;
 	default:

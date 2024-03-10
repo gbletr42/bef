@@ -176,7 +176,7 @@ int main(int argc, char **argv) {
 				{0, 0, 0, 0}
 			};
 
-	while ((opt = getopt_long(argc, argv, "hVcdr:k:m:b:l:P:H:i:o:",
+	while ((opt = getopt_long(argc, argv, "hVcdp:r:k:m:b:l:P:H:i:o:",
 				  long_options, &opt_index)) != -1) {
 		switch(opt) {
 		case 'h':

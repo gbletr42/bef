@@ -1,6 +1,8 @@
 # WARNING
 **This software package has not been extensively battle tested in the real world. While your data is *probably* safe, there may be data eating bugs hiding**
 
+**Due to a problem I hadn't forseen with information deletion/insertion, the format in v0.1 will be incompatible with the next version that fixes that major issue, hey I warned you that I would have a major flaw that I only realize talking to people in the release notes. We could solve the problem within the current limitations of the format, but it would not be performant, so we'll violate our sacred trust of backwards compatiblity this time**
+
 # Description
 Block Erasure Format is a file utility and file format designed to fix the pain points I've personally had with existing utilities. It has a nice and easy to use interface, at least according to me, it is simple with minimal overhead, and it is very fast. It is also designed to be modular and extensible, with modular hash and parity library backends. The file format is fully streamable, meaning it does not need to have a seekable file to work, so you can just pipe data right in from say tar. It is finally a very small piece of software, only around 1.5 klocs, so it should be readily auditable and forkable.
 

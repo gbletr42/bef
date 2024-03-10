@@ -202,6 +202,8 @@ int main(int argc, char **argv) {
 				preset = 2;
 			else if(strcmp(optarg, "paranoid") == 0)
 				preset = 3;
+			else
+				preset = -1;
 
 			if(bef_set_preset(&header, &bsize, preset) != 0) {
 				fprintf(stderr,

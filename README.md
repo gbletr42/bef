@@ -49,7 +49,7 @@ There are some additional optional dependencies as well
 Most of these are provided by distributions, except for liberasurecode and BLAKE3's C interface.
 
 # Comparison to other tools
-Please see [Comparison.md][Comparison.md] for a detailed comparison between this, zfec, par2cmdline, and par2cmdline-turbo.
+Please see [Comparison.md](Comparison.md) for a detailed comparison between this, zfec, par2cmdline, and par2cmdline-turbo.
 
 # Future Support/Compatibility
 With v0.2, the binary format is now frozen in place and will NEVER change. It can still be extended via use of flags and padding, but it will never be unable to be read by future versions of bef. Thus I guarantee full backward and partial forward compatibility, with the caveat that, since I am not an oracle, the forward compatibility is limited to the subset of features available at that given version, and thus incompatible with newer features extended to the binary format.

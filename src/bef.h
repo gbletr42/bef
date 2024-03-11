@@ -59,12 +59,13 @@ static const char *bef_magic = "BEFBABE";
  */
 #define BEF_BSIZE 65536
 
-/* Default search size in bytes
- * This is the number of bytes that will be searched for a valid fragment header
- * both backwards and forwards. Currently set to 64 bytes, so it'll search at
- * max 128 times before giving up.
+/* Default scan size in bytes
+ * This is the number of bytes that will be scanned for a valid fragment header
+ * both backwards and forwards. Currently set to 2048 bytes (half a default
+ * fragment), so it'll scan at max 4096 times before giving up. May decrease at
+ * a future time after some more tests
  */
-#define BEF_SBYTE 64
+#define BEF_SBYTE_DEFAULT 2048
 
 /* Default data and parity fragment ratios, just out of personal preference, I'd
  * like to lose at least 5% of the file on average before I give up and call it
@@ -230,7 +231,7 @@ int bef_construct(int input, int output, uint64_t bsize,
  * them and read the header from the input.
  */
 int bef_deconstruct(int input, int output, struct bef_real_header header,
-		    uint8_t raw_f);
+		    uint8_t raw_f, size_t sbyte);
 
 /* Memory-related boilerplate functions, crashes when out of memory */
 void *bef_malloc(size_t sz);

@@ -324,7 +324,7 @@ int main(int argc, char **argv) {
 		ret = bef_construct(input, output, bsize, header, rflag);
 		return ret;
 	} else if(dflag) {
-		ret = bef_deconstruct(input, output, header, rflag);
+		ret = bef_deconstruct(input, output, header, rflag, 0);
 		return ret;
 	}
 }

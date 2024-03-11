@@ -40,7 +40,7 @@ void bef_help() {
 	printf("erasure coded streams. More information can be found in\n");
 	printf("the manpage\n\n");
 	printf("-h|--help			Print this help message\n");
-	printf("-v|--version			Print version of bef\n");
+	printf("-V|--version			Print version of bef\n");
 	printf("-c|--construct|--encode		Constructs a new BEF file\n");
 	printf("-d|--deconstruct|--decode	Deconstructs an existing\n");
 	printf("				BEF file\n");

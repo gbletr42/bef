@@ -16,8 +16,8 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <stdio.h>
 #include "bef.h"
+#include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -305,9 +305,17 @@ int main(int argc, char **argv) {
 			break;
 		case 'i':
 			input = open(optarg, O_RDONLY);
+			if(input == -1) {
+				perror("Error opening input file");
+				exit(-BEF_ERR_INVALINPUT);
+			}
 			break;
 		case 'o':
 			output = open(optarg, O_RDWR | O_CREAT | O_TRUNC, 0644);
+			if(input == -1) {
+				perror("Error creating output file");
+				exit(-BEF_ERR_INVALINPUT);
+			}
 			break;
 		default:
 			break;

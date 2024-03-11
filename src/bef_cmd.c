@@ -312,7 +312,7 @@ int main(int argc, char **argv) {
 			break;
 		case 'o':
 			output = open(optarg, O_RDWR | O_CREAT | O_TRUNC, 0644);
-			if(input == -1) {
+			if(output == -1) {
 				perror("Error creating output file");
 				exit(-BEF_ERR_INVALINPUT);
 			}

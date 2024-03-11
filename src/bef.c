@@ -1281,6 +1281,9 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	if(sbyte == 0)
 		sbyte = BEF_SBYTE_DEFAULT;
 
+	if(sbyte >= header.nbyte)
+		sbyte = header.nbyte - 1; //Set to less than fragment size
+
 	/* Allocate our buffers */
 	ibuf_s = (header.k + header.m) * header.nbyte * header.il_n;
 	/* Allocate extra for scanning, plus align it with fragment size */

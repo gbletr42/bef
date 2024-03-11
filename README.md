@@ -1,8 +1,6 @@
 # WARNING
 **This software package has not been extensively battle tested in the real world. While your data is *probably* safe, there may be data eating bugs hiding**
 
-**Due to a problem I hadn't forseen with information deletion/insertion, the format in v0.1 will be incompatible with the next version that fixes that major issue, hey I warned you that I would have a major flaw that I only realize talking to people in the release notes. We could solve the problem within the current limitations of the format, but it would not be performant, so we'll violate our sacred trust of backwards compatiblity this time**
-
 # Description
 Block Erasure Format is a file utility and file format designed to fix the pain points I've personally had with existing utilities. It has a nice and easy to use interface, at least according to me, it is simple with minimal overhead, and it is very fast. It is also designed to be modular and extensible, with modular hash and parity library backends. The file format is fully streamable, meaning it does not need to have a seekable file to work, so you can just pipe data right in from say tar. It is finally a very small piece of software, only around 1.5 klocs, so it should be readily auditable and forkable.
 
@@ -20,7 +18,16 @@ This format is pretty similar to the one used in CDs, but unlike that standard b
 
 Currently, that is all the information stored in the header, making it only 20 bytes large. However, we want to be able to extend the format in the future and ensure we are getting a good header. So the header has additional operation flags and padding to make it 64 bytes, is duplicated in case it corrupts, and a hash is available to check its integrity. In the worst case, we can omit the header entirely if we already know all information.
 
-I believe this format is, or at least can be with the right settings, highly resilient to burst corruption. Under default settings, it can handle in the worst case one burst of slightly larger than 8KiB per 192KiB. It is however not resilient to random noise, and will corrupt beyond repair in such environments. Luckily environments with such ambient noise in computing are rare, outside of telecommunications.
+I believe this format is, or at least can be with the right settings, highly resilient to burst corruption. Under default settings, it can handle in the worst case one burst of slightly larger than 16KiB per 320KiB. It is however not resilient to random noise, and will corrupt beyond repair in such environments. Luckily environments with such ambient noise in computing are rare, outside of telecommunications.
+
+## Limitations
+This format does NOT offer full parity with every other fragment in the stream, rather each block is erasure coded individually into block fragments and interleaved. This means that a given block can be corrupted by one or more burst errors of relatively small size (a little over 16KiB by default is a probability game). A really unlucky burst could corrupt multiple block fragments such that it makes a given block unrecoverable.
+
+Currently, by default each block is 64KiB in size, erasure coded with 15 data fragments and 1 parity, and interleaved 5 at a time. This means the absolute worst case burst size that can lead to a given block becoming unrecoverable is a little larger than 16KiB, as, assuming each fragment is 4KiB, it could do something like this
+
+1 byte corrupts frag x of block n, 4096 bytes corrupts frag x of block n+1, 4096 bytes corrupts frag x of block n+2, 4096 bytes corrupts frag x of block n+3, 4096 bytes corrupts frag x of block n+4, 1 byte corrupts frag x+1 of block n.
+
+And as such _two_ fragments for block n were corrupted, when by default we only have 1 parity. The more fragments you interleave, the closer and closer you get to achieving a burst size equal to the total size of parities in the whole set of interleaved block fragments. This is a fundamental limitation in the format, so if you need maximal assurance your data will be safe with a giant burst of say a megabyte, I recommend using par2cmdline instead as it offers those assurances.
 
 # What will it build on?
 I have built and tested it against x86-64 and x86, on Debian Bookworm and Alpine Linux 3.19, and the results are that it _seems_ to work on both architectures!
@@ -41,21 +48,10 @@ There are some additional optional dependencies as well
 
 Most of these are provided by distributions, except for liberasurecode and BLAKE3's C interface.
 
-# Benchmarks
-These benchmarks are done on a Dell Latitude 7490, i5-7300U, 16GB of RAM, . The test file is 1GiB of random data recently read with cat right before the benchmark, and also in /tmp/. The software packages being compared are mine's truly, zfec, and par2cmdline (you'll see why its last ;) )
-
-| Run  | bef  | zfec | par2 |
-| ---- | ---- | ---- | ---- |
-| encode time (SSD) | 2.17s | 17.23s | 41.88s |
-| decode time (SSD) | 1.06s | 1.72s | 0s (doesn't touch original data) |
-| decode time + corruption (SSD) | 4.39s | 1.79s | 21.62s |
-| encode time (tmpfs) | 2.05s | 11.64s | 42.90s |
-| decode time (tmpfs) | 1.12s | 1.46s | 0s (doesn't touch original data) |
-| decode time + corruption (tmpfs) | 1.11s | 1.44s | 19.92s |
-
-As one can see, bef is significantly faster than each option except zfec when it comes to decoding a corrupted fragment or two on disk. Par2 is very very slow, and that's very much one of the main reasons I made this software.
+# Comparison to other tools
+Please see [Comparison.md][Comparison.md] for a detailed comparison between this, zfec, par2cmdline, and par2cmdline-turbo.
 
 # Future Support/Compatibility
-With v0.1, the binary format is now frozen in place and will NEVER change. It can still be extended via use of flags and padding, but it will never be unable to be read by future versions of bef. Thus I guarantee full backward and partial forward compatibility, with the caveat that, since I am not an oracle, the forward compatibility is limited to the subset of features available at that given version, and thus incompatible with newer features extended to the binary format.
+With v0.2, the binary format is now frozen in place and will NEVER change. It can still be extended via use of flags and padding, but it will never be unable to be read by future versions of bef. Thus I guarantee full backward and partial forward compatibility, with the caveat that, since I am not an oracle, the forward compatibility is limited to the subset of features available at that given version, and thus incompatible with newer features extended to the binary format.
 
 However, the CLI is not frozen in place, but I will try my hardest to never modify, and the internal library API/ABI has no guarantees of any compatibility with any other version.

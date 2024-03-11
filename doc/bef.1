@@ -71,7 +71,7 @@ The number of data fragments to split the block size into. The default number of
 The number of parity fragments to create in redundancy to the data fragments. The default number of parity fragments is 1.
 .TP
 \fB\-l\fR, \fB\-\-interleave\fR
-The number of blocks (specifically their fragments) to interleave. The default number is 5, as it makes the worst case burst size around 80% of the total parity size per set of interleaved blocks. 
+The number of blocks (specifically their fragments) to interleave. The default number is 5, as it makes the worst case burst size around 80% of the total parity size per set of interleaved blocks. The more blocks you interleave, the closer and closer the absolute worst case burst size becomes to the total size of your parity fragments per set of interleaved blocks.
 .TP
 \fB\-P\fR, \fB\-\-parity-type\fR
 The specific parity backend type to use to compute the erasure codes. Options are below. Default is fec-vand, as it is fast in almost all cases and allows up to 256 fragments.

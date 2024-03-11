@@ -1,9 +1,9 @@
 # Preliminary
 We are going to be comparing this tool against 3 others
 
-* [zfec][https://github.com/tahoe-lafs/zfec]
-* [par2cmdline][https://github.com/Parchive/par2cmdline]
-* [par2cmdline-turbo][https://github.com/animetosho/par2cmdline-turbo]
+* [zfec](https://github.com/tahoe-lafs/zfec)
+* [par2cmdline](https://github.com/Parchive/par2cmdline)
+* [par2cmdline-turbo](https://github.com/animetosho/par2cmdline-turbo)
 
 Each of these are in their own right useful tools for creating erasure coded backups, so I'll briefly describe what they do and their benefits/drawbacks.
 

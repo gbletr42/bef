@@ -783,6 +783,8 @@ static int bef_construct_frag(char *output, char *body, size_t frag_len,
 
 	/* Set body hash */
 	ret = bef_digest(body, frag_len, header.b_hash, hash_t);
+	if(ret != 0)
+		return ret;
 
 	bef_prepare_frag_header(&header);
 

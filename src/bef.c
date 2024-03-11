@@ -1140,7 +1140,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	size_t offset = 0;
 	memset(index, '\0', header.il_n * sizeof(*index));
 
-	for(; offset < ibuf_s - (sbyte + sizeof(frag_h));
+	for(; offset < ibuf_s - (sbyte + header.nbyte);
 	    offset += header.nbyte) {
 		ret = bef_scan_fragment(ibuf, &offset, sbyte, flag, header);
 		if(ret != 0) {
@@ -1289,7 +1289,10 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	/* Allocate our buffers */
 	ibuf_s = (header.k + header.m) * header.nbyte * header.il_n;
 	/* Allocate extra for scanning, plus align it with fragment size */
-	ibuf_s += sbyte * header.il_n * (header.k + header.m);
+	if(sbyte * header.il_n * (header.k + header.m) >= header.nbyte)
+		ibuf_s += sbyte * header.il_n * (header.k + header.m);
+	else
+		ibuf_s += header.nbyte;
 	ibuf_s = (ibuf_s / header.nbyte) * header.nbyte;
 	ibuf = bef_malloc(ibuf_s);
 

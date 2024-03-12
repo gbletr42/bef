@@ -14,6 +14,11 @@ Each of these are in their own right useful tools for creating erasure coded bac
 # Benchmark
 General details of the benchmark will be that the test file will be 1GiB of random data, the location will be in /tmp/ to minimize any bias from the storage device or filesystem, and that each tool shall get around 25% redundancy. The specific series of commands to do the test are listed below. The specific hardware details of the machine running the tests are that it is a Dell Latitude 7490, i5-7300U, with 16GB of RAM.
 
+bef version: 0.2.1  
+zfec version: 1.5.7.4  
+par2cmdline version: 0.8.1  
+par2cmdline-turbo version: 1.1.1
+
 bef encode: bef -c -k 4 -m 1 -i test -o test.bef  
 bef corruption: dd if=/dev/zero of=test.bef bs=4K count=1 oseek=1 conv=notrunc  
 bef decode: bef -d -i test.bef -o test.dec  
@@ -22,7 +27,7 @@ zfec encode: zfec -m 5 -k 4 test
 zfec corruption: rm test.0\_5.fec  
 zfec decode: zunfec \*.fec -o test2  
 
-par2cmdline[-turbo] encode: par2 c -r25 test  
+par2cmdline[-turbo] encode: par2 c -b48 -n2 -u -r25 test  
 par2cmdline[-turbo] corruption: dd if=/dev/zero of=test bs=4K count=1 conv=notrunc  
 par2cmdline[-turbo] decode: par2 r test  
 
@@ -30,10 +35,10 @@ Below is the table detailing time for encode and decode for each of the 4 tools.
 
 | Program | Encode | Decode |
 | ------- | ------ | ------ |
-| bef | 2.35s | 0.975s |
-| zfec | 4.52s | 2.40s |
-| par2cmdline-turbo | 20.43s | 7.86s |
-| par2cmdline | 159.52s | 20.58s |
+| bef | 2.44s | 0.879s |
+| zfec | 4.36s | 2.59s |
+| par2cmdline-turbo | 3.73s | 8.70s |
+| par2cmdline | 14.49s | 25.86s |
 
 As one can see, my tool is significantly faster than every other option. However, it should be noted that par2 offers significantly greater protection against corruption as it can repair against any arbitrary corruption, rather than either my tool or zfec, which can only repair corruption per block or can only work with complete erasure of blocks respectively.
 

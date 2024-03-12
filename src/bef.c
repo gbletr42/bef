@@ -453,7 +453,7 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 	 * a bit hacky, but it works!
 	 */
 	for(int i = 0; i < k; i++) {
-		*(data + i) = malloc(size + sizeof(header));
+		*(data + i) = bef_malloc(size + sizeof(header));
 		header.block_num = i;
 
 		memcpy(*(data + i), &header, sizeof(header));
@@ -462,7 +462,7 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 		*(data + i) += sizeof(header); //Evil and Satanic
 	}
 	for(int i = 0; i < m; i++) {
-		*(parity + i) = malloc(size + sizeof(header));
+		*(parity + i) = bef_malloc(size + sizeof(header));
 		block_nums[i] = k + i;
 		header.block_num = k + i;
 		memcpy(*(parity + i), &header, sizeof(header));

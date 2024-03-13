@@ -1101,7 +1101,6 @@ static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
 			     uint8_t flag, struct bef_real_header header)
 {
 	int ret;
-	uint8_t found = 0;
 
 	/* First test current offset, as this may be a well-crafted file */
 	ret = bef_verify_fragment(ibuf + *offset, header.nbyte, header.hash_t,
@@ -1114,7 +1113,7 @@ static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
 		sbyte *= 2;
 	}
 
-	for(;! found && sbyte > 0; sbyte--) {
+	for(; sbyte > 0; sbyte--) {
 		ret = bef_verify_fragment(ibuf + *offset, header.nbyte,
 					  header.hash_t, BEF_VERIFY_FRAG_H);
 		if(ret == 0)

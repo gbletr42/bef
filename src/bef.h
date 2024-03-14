@@ -71,7 +71,7 @@ static const char *bef_magic = "BEFBABE";
  * like to lose at least 5% of the file on average before I give up and call it
  * quits.
  */
-#define BEF_K_DEFAULT	15
+#define BEF_K_DEFAULT	16
 #define BEF_M_DEFAULT	1
 
 /* Default number of blocks to interleave is 5, which with default block size
@@ -97,9 +97,13 @@ static const char *bef_magic = "BEFBABE";
 #define BEF_HASH_XXHASH		9 //Default, fast and reasonably secure
 #define BEF_HASH_DEFAULT	BEF_HASH_XXHASH
 
+/* Our parity library backends */
+#define BEF_BACKEND_LIBERASURECODE	1
+#define BEF_BACKEND_LIBFEC		2
+
 /* Our parity types, currently just copied liberasurecode
  * Haven't used/benchmarked non reed solomon codes */
-#define	BEF_PAR_NONE	1 //No erasure code parities of any kind
+//#define BEF_PAR_NONE	1 //No erasure code parities of any kind
 //#define BEF_PAR_XOR	2 //Basic Flat XOR
 #define BEF_PAR_J_V_RS	3 //Jerasure Vandermonde Reed Solomon
 #define BEF_PAR_J_C_RS	4 //Jerasure Cauchy Reed Solomon

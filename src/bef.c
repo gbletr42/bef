@@ -61,6 +61,9 @@ struct bef_fec_header {
 	uint32_t padding;
 };
 
+static int bef_desc = -1;
+static fec_t *bef_context = NULL;
+
 void *bef_malloc(size_t sz)
 {
 	void *ptr = malloc(sz);
@@ -91,47 +94,160 @@ void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz)
 	return ptr;
 }
 
-/* Our great padding function from the sky, integrating all the messy padding
- * problems I was having. This function integrates the 4 layers of padding
- * previously divided up into 1 great padding function, which pads it to il_n
- * (bsize + (k - bsize % k)) bytes. For those who are curious, this is what this
- * function was unifying (may God forgive me for this evil I am about to type)
- *
- * 1. First we must pad out at least il_n - bytes bytes, if bytes < il_n.
- * 2. Second we must pad out at least k - bytes per interleaved block, if its
- * less than k bytes.
- * 3. Third we must pad out at least byte % k bytes to all but the last
- * fragment, if byte % k != 0, to ensure equal sized fragments for libfec (and
- * future low level backends).
- * 4. Fourth we must pad out the resulting fragment length to nbyte, if fragment
- * length < nbyte.
- *
- * Each one of these would have to be placed in different structs, meaning that
- * without unification, the underlying data would look like this mess
- * struct -> struct -> struct -> struct -> data -> padding -> struct -> data -> padding -> [...]
- *
- * Simply evil and Satanic, the diagram doesn't even fit on 80 characters!
- * We can do better without sacrificing any of the protective properties of our
- * format with this padding function from the sky.
- *
- * inbyte must obviously be at most il_n * (bsize + (k - bsize % k)), and input
- * must be as large as inbyte.
- *
- * returns the number of total padded bytes
- */
-static uint64_t bef_sky_padding(char *input, size_t inbyte,
-				uint16_t il_n, uint16_t k, uint64_t bsize)
+#ifdef BEF_LIBERASURECODE
+static ec_backend_id_t bef_liberasurecode_par_switch(bef_par_t par_t)
 {
-	uint64_t common = k * 512; //512 for AVX-512 in some backends
+	ec_backend_id_t ret;
+
+	switch(par_t) {
+	case BEF_PAR_J_V_RS:
+		ret = EC_BACKEND_JERASURE_RS_VAND;
+		break;
+	case BEF_PAR_J_C_RS:
+		ret = EC_BACKEND_JERASURE_RS_CAUCHY;
+		break;
+	case BEF_PAR_LE_V_RS:
+		ret = EC_BACKEND_LIBERASURECODE_RS_VAND;
+		break;
+	case BEF_PAR_I_V_RS:
+		ret = EC_BACKEND_ISA_L_RS_VAND;
+		break;
+	case BEF_PAR_I_C_RS:
+		ret = EC_BACKEND_ISA_L_RS_CAUCHY;
+		break;
+	default:
+		ret = EC_BACKENDS_MAX;
+		break;
+	}
+
+	return ret;
+}
+
+static int bef_liberasurecode_init(bef_par_t par_t, uint16_t k, uint16_t m)
+{
+	ec_backend_id_t backend_id;
+	struct ec_args args;
+	int ret;
+	args.k = k;
+	args.m = args.hd = m; //Only support RS for now
+
+	if(bef_desc == -1) {
+		backend_id = bef_liberasurecode_par_switch(par_t);
+		if(backend_id == EC_BACKENDS_MAX)
+			return -BEF_ERR_INVALINPUT;
+
+		ret = liberasurecode_backend_available(backend_id);
+		if(ret < 0)
+			return -ret;
+
+		bef_desc = liberasurecode_instance_create(backend_id, &args);
+		if(bef_desc < 0)
+			return -bef_desc;
+	}
+
+	return 0;
+}
+#endif
+
+static void bef_fec_init(uint16_t k, uint16_t m)
+{
+	fec_init();
+
+	bef_context = fec_new(k, k+m);
+}
+
+/* Function to initialize reusable global variables */
+static int bef_init(struct bef_real_header header)
+{
+	int ret;
+
+	switch(header.par_t) {
+#ifdef BEF_LIBERASURECODE
+	case BEF_PAR_J_V_RS:
+	case BEF_PAR_J_C_RS:
+	case BEF_PAR_LE_V_RS:
+	case BEF_PAR_I_V_RS:
+	case BEF_PAR_I_C_RS:
+		ret = bef_liberasurecode_init(header.par_t, header.k, header.m);
+		break;
+#endif
+	case BEF_PAR_F_V_RS:
+		ret = 0;
+		bef_fec_init(header.k, header.m);
+		break;
+	default:
+		ret = -BEF_ERR_INVALINPUT;
+		break;
+	}
+
+	return ret;
+}
+
+#ifdef BEF_LIBERASURECODE
+static int bef_liberasurecode_destroy()
+{
+	int ret;
+
+	ret = liberasurecode_instance_destroy(bef_desc);
+	if(ret < 0)
+		return -ret;
+	else
+		return 0;
+}
+#endif
+
+static void bef_fec_destroy()
+{
+	fec_free(bef_context);
+}
+
+/* Function to clean up global reusable variables */
+static int bef_destroy(struct bef_real_header header)
+{
+	int ret;
+
+	switch(header.par_t) {
+#ifdef BEF_LIBERASURECODE
+	case BEF_PAR_J_V_RS:
+	case BEF_PAR_J_C_RS:
+	case BEF_PAR_LE_V_RS:
+	case BEF_PAR_I_V_RS:
+	case BEF_PAR_I_C_RS:
+		ret = bef_liberasurecode_destroy();
+		break;
+#endif
+	case BEF_PAR_F_V_RS:
+		ret = 0;
+		bef_fec_destroy();
+		break;
+	default:
+		ret = -BEF_ERR_INVALINPUT;
+		break;
+	}
+
+	return ret;
+}
+
+/* Our great padding function from the sky. Gives the amount of padded bytes
+ * that would satisfy these properties.
+ *
+ * 1.	Divisible by il_n
+ * 2.	Divisible by k
+ * 3.	Large enough to hold inbyte.
+ */
+static uint64_t bef_sky_padding(size_t inbyte,
+				uint16_t il_n, uint16_t k, uint64_t bsize,
+				bef_par_t par_t)
+{
+	uint64_t common = k;
 	uint64_t pbyte = il_n * bsize;
 
 	if(pbyte % common != 0)
 		pbyte += common - pbyte % common;
 
-	if(inbyte < pbyte) {
+	if(inbyte < pbyte)
 		pbyte -= inbyte;
-		memset(input + inbyte, '\0', pbyte);
-	} else
+	else
 		pbyte = 0;
 
 	return pbyte;
@@ -354,66 +470,19 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 }
 
 #ifdef BEF_LIBERASURECODE
-static ec_backend_id_t bef_liberasurecode_par_switch(bef_par_t par_t)
-{
-	ec_backend_id_t ret;
-
-	switch(par_t) {
-	case BEF_PAR_J_V_RS:
-		ret = EC_BACKEND_JERASURE_RS_VAND;
-		break;
-	case BEF_PAR_J_C_RS:
-		ret = EC_BACKEND_JERASURE_RS_CAUCHY;
-		break;
-	case BEF_PAR_LE_V_RS:
-		ret = EC_BACKEND_LIBERASURECODE_RS_VAND;
-		break;
-	case BEF_PAR_I_V_RS:
-		ret = EC_BACKEND_ISA_L_RS_VAND;
-		break;
-	case BEF_PAR_I_C_RS:
-		ret = EC_BACKEND_ISA_L_RS_CAUCHY;
-		break;
-	default:
-		ret = EC_BACKENDS_MAX;
-		break;
-	}
-
-	return ret;
-}
-
 static int bef_encode_liberasurecode(const char *input, size_t inbyte,
 				     char **data, char **parity,
 				     size_t *frag_len, int k, int m,
 				     bef_par_t par_t)
 {
 	int ret;
-	int desc;
-	ec_backend_id_t backend_id;
-	struct ec_args args = {0};
 	char **tmp_data;
 	char **tmp_parity;
-	args.k = k;
-	args.m = args.hd = m; //Only support RS for now
 
-	backend_id = bef_liberasurecode_par_switch(par_t);
-	if(backend_id == EC_BACKENDS_MAX) {
-		ret = -BEF_ERR_INVALINPUT;
-		goto out;
-	}
-
-	desc = liberasurecode_instance_create(backend_id, &args);
-	if(desc < 0) {
-		ret = -desc;
-		goto out;
-	}
-
-	ret = liberasurecode_encode(desc, input, inbyte, &tmp_data, &tmp_parity,
+	ret = liberasurecode_encode(bef_desc, input, inbyte, &tmp_data, &tmp_parity,
 				    (uint64_t *) frag_len);
-	if(ret < 0) {
-		ret = -ret;
-		goto instance_cleanup;
-	}
+	if(ret < 0)
+		return -ret;
 
 	/* Copy over the results */
 	for(int i = 0; i < k; i++) {
@@ -426,15 +495,12 @@ static int bef_encode_liberasurecode(const char *input, size_t inbyte,
 	}
 
 	/* Free our given buffers */
-	ret = liberasurecode_encode_cleanup(desc, tmp_data, tmp_parity);
+	ret = liberasurecode_encode_cleanup(bef_desc, tmp_data, tmp_parity);
 	if(ret < 0) {
 		ret = -ret;
 		bef_encode_free(data, parity, k, m);
 	}
 
-instance_cleanup:
-	liberasurecode_instance_destroy(desc); //DOES NOT CHECK FOR ERRORS!
-out:
 	return ret;
 }
 #endif
@@ -450,7 +516,6 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 	struct bef_fec_header header;
 	size_t size = inbyte / k; //Size of each data fragment, prepadded
 	unsigned int block_nums[m];
-	fec_t *context;
 	*frag_len = sizeof(header) + size;
 
 	/* Allocate our arrays, moving the pointer past the header. I know, it's
@@ -473,14 +538,9 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 		*(parity + i) += sizeof(header); //Evil and Satanic
 	}
 
-	/* API says "at least once", so surely multiple times won't hurt? */
-	fec_init();
-
-	context = fec_new(k, k+m);
-
 	/* I rather live with the warning than add a million consts */
-	fec_encode(context, (unsigned char **)data, (unsigned char **) parity,
-		   block_nums, m, size);
+	fec_encode(bef_context, (unsigned char **) data,
+		   (unsigned char **) parity, block_nums, m, size);
 
 	/* Now set the pointers back */
 	for(int i = 0; i < k; i++)
@@ -488,7 +548,6 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 	for(int i = 0; i < m; i++)
 		*(parity + i) -= sizeof(header);
 
-	fec_free(context);
 	return 0;
 }
 
@@ -536,39 +595,14 @@ static int bef_decode_liberasurecode(char **frags, uint16_t frag_len,
 				     bef_par_t par_t)
 {
 	int ret;
-	int desc;
-	ec_backend_id_t backend_id;
-	struct ec_args args = {0};
 	char *tmp_output;
 	uint64_t tmp_len;
-	args.k = k;
-	args.m = args.hd = m;
 
-	backend_id = bef_liberasurecode_par_switch(par_t);
-	if(backend_id == EC_BACKENDS_MAX) {
-		ret = -BEF_ERR_INVALINPUT;
-		goto out;
-	}
-
-	ret = liberasurecode_backend_available(backend_id);
-	if(ret < 0) {
-		ret = -ret;
-		goto out;
-	}
-
-	desc = liberasurecode_instance_create(backend_id, &args);
-	if(desc < 0) {
-		ret = -desc;
-		goto out;
-	}
-
-	ret = liberasurecode_decode(desc, frags, (int) frag_len,
+	ret = liberasurecode_decode(bef_desc, frags, (int) frag_len,
 				    (uint64_t) frag_b, 0, &tmp_output,
 				    &tmp_len);
-	if(ret < 0) {
-		ret = -ret;
-		goto instance_cleanup;
-	}
+	if(ret < 0)
+		return -ret;
 
 	/* Copy over our data */
 	*output = bef_malloc((size_t) tmp_len);
@@ -576,16 +610,13 @@ static int bef_decode_liberasurecode(char **frags, uint16_t frag_len,
 	memcpy(*output, tmp_output, *onbyte);
 
 	/* free the liberasurecode structures */
-	ret = liberasurecode_decode_cleanup(desc, tmp_output);
+	ret = liberasurecode_decode_cleanup(bef_desc, tmp_output);
 	if(ret < 0) {
 		ret = -ret;
 		bef_decode_free(*output);
 	} else if(ret > 0)
 		ret = 0;
 
-instance_cleanup:
-	liberasurecode_instance_destroy(desc); //DOES NOT CHECK FOR ERRORS!!!
-out:
 	return ret;
 }
 #endif
@@ -598,7 +629,6 @@ out:
 static int bef_decode_libfec(char **frags, uint16_t k, size_t frag_b,
 			     char **output, size_t *onbyte, int m)
 {
-	fec_t *context;
 	char *out_arr[m]; //At most m outputs
 	char *recon_arr[k]; //At most k outputs
 	uint16_t stack[m];
@@ -635,16 +665,9 @@ static int bef_decode_libfec(char **frags, uint16_t k, size_t frag_b,
 	/* Allocate our output buffer */
 	*output = bef_malloc(*onbyte);
 
-	if(found > 0) { //We can just read directly if they're all good
-		fec_init(); //Same question as before, guess we'll find out
-
-		context = fec_new(k, k+m);
-
-		fec_decode(context, (unsigned char **) recon_arr,
+	if(found > 0) //We can just read directly if they're all good
+		fec_decode(bef_context, (unsigned char **) recon_arr,
 			   (unsigned char **) out_arr, block_nums, size);
-
-		fec_free(context); //Freed here rather than at return
-	}
 
 	/* Write to output buffer */
 	found = 0;
@@ -719,6 +742,7 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 	char **data = bef_malloc(k * sizeof(*data));
 	char **parity = bef_malloc(m * sizeof(*parity));
 	size_t frag_len;
+	uint64_t pbyte;
 
 	/* Our lovely, sexy, beautiful magic number */
 	memcpy(header->magic, bef_magic, 7);
@@ -737,8 +761,9 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 	}
 
 	/* Pad out if necessary */
-	bef_sky_padding(ibuf, (size_t) rret, header->header.il_n,
-			header->header.k, bsize);
+	pbyte = bef_sky_padding((size_t) rret, header->header.il_n,
+				header->header.k, bsize, header->header.par_t);
+	memset(ibuf + rret, '\0', pbyte);
 
 	*lret = (size_t) rret;
 
@@ -855,9 +880,11 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 	char ***blocks;
 	char **frags;
 	size_t frag_len = 0;
-	uint64_t pbyte = bef_sky_padding(ibuf, ibuf_s, header.il_n, header.k,
-					 bsize);
+	uint64_t pbyte = bef_sky_padding(ibuf_s, header.il_n, header.k,
+					 bsize, header.par_t);
 	size_t fbyte = (ibuf_s + pbyte) / header.il_n;
+
+	memset(ibuf + ibuf_s, '\0', pbyte);
 
 	bef_construct_buffers(&blocks, header.k + header.m, header.il_n);
 
@@ -899,8 +926,10 @@ static int bef_construct_encode(int input, int output,
 	ssize_t bret;
 	size_t obuf_s = (header.k + header.m) * header.nbyte * header.il_n;
 	char *obuf = bef_malloc(obuf_s);
-	size_t ibuf_s = header.il_n * (bsize + (header.k - bsize % header.k));
+	size_t ibuf_s = header.il_n * bsize;
 	uint64_t il_count = 0;
+	ibuf_s += bef_sky_padding(ibuf_s, header.il_n, header.k, bsize,
+				  header.par_t);
 
 	/* Redo very first few blocks, source still in input */
 	ret = bef_encode_blocks(ibuf, lret, obuf, bsize, il_count++, header);
@@ -965,8 +994,14 @@ int bef_construct(int input, int output, uint64_t bsize,
 	if(header.il_n == 0)
 		header.il_n = BEF_IL_N_DEFAULT;
 
+	ret = bef_init(header);
+	if(ret != 0)
+		return ret;
+
 	/* Estimate size of our shared input buffer, using bsize and k */
-	ibuf_s = header.il_n * (bsize + (header.k - bsize % header.k));
+	ibuf_s = header.il_n * bsize;
+	ibuf_s += bef_sky_padding(ibuf_s, header.il_n, header.k, bsize,
+				  header.par_t);
 	ibuf = bef_malloc(ibuf_s);
 
 	head.header = header;
@@ -975,28 +1010,36 @@ int bef_construct(int input, int output, uint64_t bsize,
 		ret = bef_construct_header(input, ibuf, ibuf_s, bsize, &lret,
 					   &head);
 		if(ret != 0)
-			return ret;
+			goto out;
 
 		/* Write our header to output */
 		bret = bef_safe_rw(output, &head, sizeof(head), BEF_SAFE_WRITE);
-		if(bret != sizeof(head))
-			return -BEF_ERR_WRITEERR;
+		if(bret != sizeof(head)) {
+			ret = -BEF_ERR_WRITEERR;
+			goto out;
+		}
 	} else {
 		bret = bef_safe_rw(input, ibuf, ibuf_s, BEF_SAFE_READ);
-		if(bret == -1)
-			return -BEF_ERR_READERR;
+		if(bret == -1) {
+			ret = -BEF_ERR_READERR;
+			goto out;
+		}
 		lret = (size_t) bret;
 	}
 
-	if(head.header.nbyte == 0)
-		return -BEF_ERR_INVALINPUT;
+	if(head.header.nbyte == 0) {
+		ret = -BEF_ERR_INVALINPUT;
+		goto out;
+	}
 
 	/* ibuf should be freed by this function, so no need to check */
 	ret = bef_construct_encode(input, output, ibuf, bsize, lret,
 				   head.header);
 	if(ret != 0)
-		return ret;
+		goto out;
 
+out:
+	bef_destroy(header);
 	return ret;
 }
 
@@ -1283,6 +1326,10 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 			return -BEF_ERR_INVALINPUT;
 	}
 
+	ret = bef_init(header);
+	if(ret != 0)
+		return ret;
+
 	if(sbyte == 0)
 		sbyte = BEF_SBYTE_DEFAULT;
 
@@ -1337,6 +1384,7 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	}
 
 out:
+	bef_destroy(header);
 	free(obuf);
 	free(ibuf);
 	return ret;

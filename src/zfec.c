@@ -62,21 +62,10 @@ modnn(int x) {
 /*
  * gf_mul(x,y) multiplies two numbers.  It is much faster to use a
  * multiplication table.
- *
- * USE_GF_MULC, GF_MULC0(c) and GF_ADDMULC(x) can be used when multiplying
- * many numbers by the same constant. In this case the first call sets the
- * constant, and others perform the multiplications.  A value related to the
- * multiplication is held in a local variable declared with USE_GF_MULC . See
- * usage in _addmul1().
  */
 static gf gf_mul_table[256][256];
 
 #define gf_mul(x,y) gf_mul_table[x][y]
-
-#define USE_GF_MULC register gf * __gf_mulc_
-
-#define GF_MULC0(c) __gf_mulc_ = gf_mul_table[c]
-#define GF_ADDMULC(dst, x) dst ^= __gf_mulc_[x]
 
 /*
  * Generate GF(2**m) from the irreducible polynomial p(X) in p[0]..p[m]
@@ -180,41 +169,35 @@ generate_gf (void) {
 #define addmul(dst, src, c, sz)                 \
     if (c != 0) _addmul1(dst, src, c, sz)
 
-#define UNROLL 16               /* 1, 4, 8, 16 */
+#define UNROLL 16
 static void
 _addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz) {
-    USE_GF_MULC;
+    register gf *gf_mulc;
     const gf* lim = &dst[sz - UNROLL + 1];
 
-    GF_MULC0 (c);
+    gf_mulc = gf_mul_table[c];
 
-#if (UNROLL > 1)                /* unrolling by 8/16 is quite effective on the pentium */
     for (; dst < lim; dst += UNROLL, src += UNROLL) {
-        GF_ADDMULC (dst[0], src[0]);
-        GF_ADDMULC (dst[1], src[1]);
-        GF_ADDMULC (dst[2], src[2]);
-        GF_ADDMULC (dst[3], src[3]);
-#if (UNROLL > 4)
-        GF_ADDMULC (dst[4], src[4]);
-        GF_ADDMULC (dst[5], src[5]);
-        GF_ADDMULC (dst[6], src[6]);
-        GF_ADDMULC (dst[7], src[7]);
-#endif
-#if (UNROLL > 8)
-        GF_ADDMULC (dst[8], src[8]);
-        GF_ADDMULC (dst[9], src[9]);
-        GF_ADDMULC (dst[10], src[10]);
-        GF_ADDMULC (dst[11], src[11]);
-        GF_ADDMULC (dst[12], src[12]);
-        GF_ADDMULC (dst[13], src[13]);
-        GF_ADDMULC (dst[14], src[14]);
-        GF_ADDMULC (dst[15], src[15]);
-#endif
+        dst[0] ^= gf_mulc[src[0]];
+        dst[1] ^= gf_mulc[src[1]];
+        dst[2] ^= gf_mulc[src[2]];
+        dst[3] ^= gf_mulc[src[3]];
+        dst[4] ^= gf_mulc[src[4]];
+        dst[5] ^= gf_mulc[src[5]];
+        dst[6] ^= gf_mulc[src[6]];
+        dst[7] ^= gf_mulc[src[7]];
+        dst[8] ^= gf_mulc[src[8]];
+        dst[9] ^= gf_mulc[src[9]];
+        dst[10] ^= gf_mulc[src[10]];
+        dst[11] ^= gf_mulc[src[11]];
+        dst[12] ^= gf_mulc[src[12]];
+        dst[13] ^= gf_mulc[src[13]];
+        dst[14] ^= gf_mulc[src[14]];
+        dst[15] ^= gf_mulc[src[15]];
     }
-#endif
     lim += UNROLL - 1;
     for (; dst < lim; dst++, src++)       /* final components */
-        GF_ADDMULC (*dst, *src);
+        *dst ^= gf_mulc[*src];
 }
 
 /*

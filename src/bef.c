@@ -122,7 +122,11 @@ void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz)
 static uint64_t bef_sky_padding(char *input, size_t inbyte,
 				uint16_t il_n, uint16_t k, uint64_t bsize)
 {
-	uint64_t pbyte = il_n * (bsize + (k - bsize % k));
+	uint64_t common = k * 512; //512 for AVX-512 in some backends
+	uint64_t pbyte = il_n * bsize;
+
+	if(pbyte % common != 0)
+		pbyte += common - pbyte % common;
 
 	if(inbyte < pbyte) {
 		pbyte -= inbyte;

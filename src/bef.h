@@ -71,7 +71,7 @@ static const char *bef_magic = "BEFBABE";
  * like to lose at least 5% of the file on average before I give up and call it
  * quits.
  */
-#define BEF_K_DEFAULT	16
+#define BEF_K_DEFAULT	15
 #define BEF_M_DEFAULT	1
 
 /* Default number of blocks to interleave is 5, which with default block size

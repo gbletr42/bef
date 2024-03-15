@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* libfec stolen from zfec, all copyright belongs to them
+/* personally modified libfec stolen from zfec, copyright shared with them
  * Copyright (C) 2007-2010 Zooko Wilcox-O'Hearn
+ * Copyright (C) 2024 gbletr42
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -169,7 +170,7 @@ generate_gf (void) {
 #define addmul(dst, src, c, sz)                 \
     if (c != 0) _addmul1(dst, src, c, sz)
 
-#define UNROLL 16
+#define UNROLL 8
 static void
 _addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz) {
     register gf *gf_mulc;
@@ -186,14 +187,6 @@ _addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t 
         dst[5] ^= gf_mulc[src[5]];
         dst[6] ^= gf_mulc[src[6]];
         dst[7] ^= gf_mulc[src[7]];
-        dst[8] ^= gf_mulc[src[8]];
-        dst[9] ^= gf_mulc[src[9]];
-        dst[10] ^= gf_mulc[src[10]];
-        dst[11] ^= gf_mulc[src[11]];
-        dst[12] ^= gf_mulc[src[12]];
-        dst[13] ^= gf_mulc[src[13]];
-        dst[14] ^= gf_mulc[src[14]];
-        dst[15] ^= gf_mulc[src[15]];
     }
     lim += UNROLL - 1;
     for (; dst < lim; dst++, src++)       /* final components */

@@ -24,6 +24,10 @@
 #include <string.h>
 #include <assert.h>
 
+#if defined __SSE3__ || __AVX2__
+#include <immintrin.h>
+#endif
+
 /*
  * Primitive polynomials - see Lin & Costello, Appendix A,
  * and  Lee & Messerschmitt, p. 453.
@@ -170,13 +174,120 @@ generate_gf (void) {
 #define addmul(dst, src, c, sz)                 \
     if (c != 0) _addmul1(dst, src, c, sz)
 
+/* Table lookup method described by https://www.ssrc.ucsc.edu/media/pubs/c9a735170a7e1aa648b261ec6ad615e34af566db.pdf
+ * Modified AVX2 version does the same, but with duplicated halves for double
+ * the throughput
+ */
+#if defined __AVX2__
+#define SIZE 32
+static void
+_addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz) {
+    register gf *gf_mulc = gf_mul_table[c];
+    const gf* lim = &dst[sz - SIZE + 1];
+    __m256i dst_mm, src_mm, t1_mm, t2_mm, mask1, mask2, l, h;
+    t1_mm = _mm256_setr_epi8(gf_mulc[0x00], gf_mulc[0x01],
+			     gf_mulc[0x02], gf_mulc[0x03],
+			     gf_mulc[0x04], gf_mulc[0x05],
+			     gf_mulc[0x06], gf_mulc[0x07],
+			     gf_mulc[0x08], gf_mulc[0x09],
+			     gf_mulc[0x0A], gf_mulc[0x0B],
+			     gf_mulc[0x0C], gf_mulc[0x0D],
+			     gf_mulc[0x0E], gf_mulc[0x0F],
+			     gf_mulc[0x00], gf_mulc[0x01],
+			     gf_mulc[0x02], gf_mulc[0x03],
+			     gf_mulc[0x04], gf_mulc[0x05],
+			     gf_mulc[0x06], gf_mulc[0x07],
+			     gf_mulc[0x08], gf_mulc[0x09],
+			     gf_mulc[0x0A], gf_mulc[0x0B],
+			     gf_mulc[0x0C], gf_mulc[0x0D],
+			     gf_mulc[0x0E], gf_mulc[0x0F]);
+    t2_mm = _mm256_setr_epi8(gf_mulc[0x00], gf_mulc[0x10],
+			     gf_mulc[0x20], gf_mulc[0x30],
+			     gf_mulc[0x40], gf_mulc[0x50],
+			     gf_mulc[0x60], gf_mulc[0x70],
+			     gf_mulc[0x80], gf_mulc[0x90],
+			     gf_mulc[0xA0], gf_mulc[0xB0],
+			     gf_mulc[0xC0], gf_mulc[0xD0],
+			     gf_mulc[0xE0], gf_mulc[0xF0],
+			     gf_mulc[0x00], gf_mulc[0x10],
+			     gf_mulc[0x20], gf_mulc[0x30],
+			     gf_mulc[0x40], gf_mulc[0x50],
+			     gf_mulc[0x60], gf_mulc[0x70],
+			     gf_mulc[0x80], gf_mulc[0x90],
+			     gf_mulc[0xA0], gf_mulc[0xB0],
+			     gf_mulc[0xC0], gf_mulc[0xD0],
+			     gf_mulc[0xE0], gf_mulc[0xF0]);
+    mask1 = _mm256_set1_epi8(0x0F);
+    mask2 = _mm256_set1_epi8(0xF0);
+
+    for (; dst < lim; dst += SIZE, src += SIZE) {
+        src_mm = _mm256_loadu_si256((__m256i *) src);
+	l = _mm256_and_si256(src_mm, mask1);
+	l = _mm256_shuffle_epi8(t1_mm, l);
+	h = _mm256_and_si256(src_mm, mask2);
+	h = _mm256_srli_epi64(h, 4);
+	h = _mm256_shuffle_epi8(t2_mm, h);
+	src_mm = _mm256_xor_si256(h, l);
+
+	dst_mm = _mm256_loadu_si256((__m256i *) dst);
+	dst_mm = _mm256_xor_si256(dst_mm, src_mm);
+	_mm256_storeu_si256((__m256i *) dst, dst_mm);
+    }
+
+    lim += SIZE - 1;
+    for (; dst < lim; dst++, src++)       /* final components */
+        *dst ^= gf_mulc[*src];
+}
+#elif defined __SSE3__
+#define SIZE 16
+static void
+_addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz) {
+    register gf *gf_mulc = gf_mul_table[c];
+    const gf* lim = &dst[sz - SIZE + 1];
+    __m128i dst_mm, src_mm, t1_mm, t2_mm, mask1, mask2, l, h;
+    t1_mm = _mm_setr_epi8(gf_mulc[0x00], gf_mulc[0x01],
+			  gf_mulc[0x02], gf_mulc[0x03],
+			  gf_mulc[0x04], gf_mulc[0x05],
+			  gf_mulc[0x06], gf_mulc[0x07],
+			  gf_mulc[0x08], gf_mulc[0x09],
+			  gf_mulc[0x0A], gf_mulc[0x0B],
+			  gf_mulc[0x0C], gf_mulc[0x0D],
+			  gf_mulc[0x0E], gf_mulc[0x0F]);
+    t2_mm = _mm_setr_epi8(gf_mulc[0x00], gf_mulc[0x10],
+			  gf_mulc[0x20], gf_mulc[0x30],
+			  gf_mulc[0x40], gf_mulc[0x50],
+			  gf_mulc[0x60], gf_mulc[0x70],
+			  gf_mulc[0x80], gf_mulc[0x90],
+			  gf_mulc[0xA0], gf_mulc[0xB0],
+			  gf_mulc[0xC0], gf_mulc[0xD0],
+			  gf_mulc[0xE0], gf_mulc[0xF0]);
+    mask1 = _mm_set1_epi8(0x0F);
+    mask2 = _mm_set1_epi8(0xF0);
+
+    for (; dst < lim; dst += SIZE, src += SIZE) {
+        src_mm = _mm_loadu_si128((__m128i *) src);
+	l = _mm_and_si128(src_mm, mask1);
+	l = _mm_shuffle_epi8(t1_mm, l);
+	h = _mm_and_si128(src_mm, mask2);
+	h = _mm_srli_epi64(h, 4);
+	h = _mm_shuffle_epi8(t2_mm, h);
+	src_mm = _mm_xor_si128(h, l);
+
+	dst_mm = _mm_loadu_si128((__m128i *) dst);
+	dst_mm = _mm_xor_si128(dst_mm, src_mm);
+	_mm_storeu_si128((__m128i *) dst, dst_mm);
+    }
+
+    lim += SIZE - 1;
+    for (; dst < lim; dst++, src++)       /* final components */
+        *dst ^= gf_mulc[*src];
+}
+#else
 #define UNROLL 8
 static void
 _addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz) {
-    register gf *gf_mulc;
+    register gf *gf_mulc = gf_mul_table[c];
     const gf* lim = &dst[sz - UNROLL + 1];
-
-    gf_mulc = gf_mul_table[c];
 
     for (; dst < lim; dst += UNROLL, src += UNROLL) {
         dst[0] ^= gf_mulc[src[0]];
@@ -192,6 +303,7 @@ _addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t 
     for (; dst < lim; dst++, src++)       /* final components */
         *dst ^= gf_mulc[*src];
 }
+#endif
 
 /*
  * computes C = AB where A is n*k, B is k*m, C is n*m

@@ -24,7 +24,7 @@
 #include <string.h>
 #include <assert.h>
 
-#if defined __SSE3__ || __AVX2__
+#if defined __SSE3__
 #include <immintrin.h>
 #endif
 

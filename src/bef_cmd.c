@@ -36,32 +36,24 @@
 #define BEF_GB	(1000 * 1000 * 1000)
 
 void bef_help() {
-	printf("bef is a command line utility that encodes and decodes\n");
-	printf("erasure coded streams. More information can be found in\n");
-	printf("the manpage\n\n");
-	printf("-h|--help			Print this help message\n");
-	printf("-V|--version			Print version of bef\n");
-	printf("-c|--construct|--encode		Constructs a new BEF file\n");
-	printf("-d|--deconstruct|--decode	Deconstructs an existing\n");
-	printf("				BEF file\n");
-	printf("-p|--preset			Set the arguments to a\n");
-	printf("				given preset\n");
-	printf("-r|--raw			Flag to disable reading\n");
-	printf("				and/or writing the header,\n");
-	printf("				You must provide the\n");
-	printf("				fragment size to this\n");
-	printf("				argument as well\n");
-	printf("-b|--bsize			Block size for the BEF file\n");
-	printf("-k|--data			Number of data fragments\n");
-	printf("				per block\n");
-	printf("-m|--parity			Number of parity fragments\n");
-	printf("				per block\n");
-	printf("-l|--interleave			Number of blocks to\n");
-	printf("				to interleave\n");
-	printf("-P|--parity-type		Parity type for BEF file\n");
-	printf("-H|--hash-type			Hash type for BEF file\n");
-	printf("-i|--input			Input file\n");
-	printf("-o|--output			Output file\n\n");
+printf("bef is a command line utility that encodes and decodes erasure coded streams.\n");
+printf("More information can be found in the manpage\n\n");
+printf("-h|--help			Print this help message\n");
+printf("-V|--version			Print version of bef\n");
+printf("-c|--construct|--encode		Constructs a new BEF file\n");
+printf("-d|--deconstruct|--decode	Deconstructs an existing BEF file\n");
+printf("-p|--preset			Set the arguments to a given preset\n");
+printf("-r|--raw			Flag to disable reading and/or writing the\n");
+printf("				header, You must provide the fragment size to\n");
+printf("				argument as well\n");
+printf("-b|--bsize			Block size for the BEF file\n");
+printf("-k|--data			Number of data fragments per block\n");
+printf("-m|--parity			Number of parity fragments per block\n");
+printf("-l|--interleave			Number of blocks to interleave\n");
+printf("-P|--parity-type		Parity type for BEF file\n");
+printf("-H|--hash-type			Hash type for BEF file\n");
+printf("-i|--input			Input file\n");
+printf("-o|--output			Output file\n\n");
 }
 
 /* More info for each in the man page */

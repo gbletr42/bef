@@ -239,7 +239,7 @@ static uint64_t bef_sky_padding(size_t inbyte,
 				uint16_t il_n, uint16_t k, uint64_t bsize,
 				bef_par_t par_t)
 {
-	uint64_t common = k;
+	uint64_t common = k * il_n;
 	uint64_t pbyte = il_n * bsize;
 
 	if(pbyte % common != 0)

@@ -33,6 +33,9 @@
 /* Our sexy magic number ( ͡° ͜ʖ ͡°) */
 static const char *bef_magic = "BEFBABE";
 
+/* Verbosity Flag */
+extern uint8_t vflag;
+
 /* Our error codes
  * In general, all error codes are negative, and all positive returns are errors
  * being propagated back from underlying libraries if available. When an error

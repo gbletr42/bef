@@ -35,11 +35,15 @@
 #define BEF_GIB	(1024 * 1024 * 1024)
 #define BEF_GB	(1000 * 1000 * 1000)
 
+/* Our verbosity flag */
+uint8_t vflag = 0;
+
 void bef_help(void) {
 printf("bef is a command line utility that encodes and decodes erasure coded streams.\n");
 printf("More information can be found in the manpage\n\n");
 printf("-h|--help			Print this help message\n");
 printf("-V|--version			Print version of bef\n");
+printf("-v|--verbose			Print verbose output to stderr\n");
 printf("-c|--construct|--encode		Constructs a new BEF file\n");
 printf("-d|--deconstruct|--decode	Deconstructs an existing BEF file\n");
 printf("-p|--preset			Set the arguments to a given preset\n");
@@ -52,6 +56,7 @@ printf("-m|--parity			Number of parity fragments per block\n");
 printf("-l|--interleave			Number of blocks to interleave\n");
 printf("-P|--parity-type		Parity type for BEF file\n");
 printf("-H|--hash-type			Hash type for BEF file\n");
+printf("-s|--scan			Number of bytes to scan for misplaced fragments\n");
 printf("-i|--input			Input file\n");
 printf("-o|--output			Output file\n\n");
 }
@@ -140,6 +145,7 @@ int main(int argc, char **argv) {
 	int rflag = 0;
 	struct bef_real_header header = {0};
 	uint64_t bsize = 0;
+	uint64_t sbyte = 0;
 	int ret;
 	int input = STDIN_FILENO;
 	int output = STDOUT_FILENO;
@@ -151,6 +157,7 @@ int main(int argc, char **argv) {
 			{
 				{"help", no_argument, 0, 'h'},
 				{"version", no_argument, 0, 'V'},
+				{"verbose", no_argument, 0, 'v'},
 				{"construct", no_argument, 0, 'c'},
 				{"encode", no_argument, 0, 'c'},
 				{"deconstruct", no_argument, 0, 'd'},
@@ -163,12 +170,13 @@ int main(int argc, char **argv) {
 				{"interleave", required_argument, 0, 'l'},
 				{"parity-type", required_argument, 0, 'P'},
 				{"hash-type", required_argument, 0, 'H'},
+				{"scan", required_argument, 0, 's'},
 				{"input", required_argument, 0, 'i'},
 				{"output", required_argument, 0, 'o'},
 				{0, 0, 0, 0}
 			};
 
-	while ((opt = getopt_long(argc, argv, "hVcdp:r:k:m:b:l:P:H:i:o:",
+	while ((opt = getopt_long(argc, argv, "hVvcdp:r:k:m:b:l:P:H:s:i:o:",
 				  long_options, &opt_index)) != -1) {
 		switch(opt) {
 		case 'h':
@@ -178,6 +186,9 @@ int main(int argc, char **argv) {
 		case 'V':
 			printf("bef version v0.2\n");
 			exit(EXIT_SUCCESS);
+			break;
+		case 'v':
+			vflag = 1;
 			break;
 		case 'c':
 			cflag = 1;
@@ -295,6 +306,16 @@ int main(int argc, char **argv) {
 				exit(-BEF_ERR_INVALINPUT);
 			}
 			break;
+		case 's':
+			sbyte = (uint64_t) strtoll(optarg, &suffix, 10);
+			if((sbyte == UINT64_MAX || sbyte == 0) &&
+			   errno == ERANGE) {
+				fprintf(stderr,
+					"Input a proper value for -b!\n");
+				exit(-BEF_ERR_INVALINPUT);
+			}
+			sbyte *= bef_convert_suffix(suffix);
+			break;
 		case 'i':
 			input = open(optarg, O_RDONLY);
 			if(input == -1) {
@@ -324,7 +345,7 @@ int main(int argc, char **argv) {
 		ret = bef_construct(input, output, bsize, header, rflag);
 		return ret;
 	} else if(dflag) {
-		ret = bef_deconstruct(input, output, header, rflag, 0);
+		ret = bef_deconstruct(input, output, header, rflag, sbyte);
 		return ret;
 	}
 }

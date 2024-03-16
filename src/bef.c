@@ -795,6 +795,9 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 		goto out;
 
 	header->header.nbyte = (uint64_t) (frag_len + sizeof(struct bef_frag_header));
+	if(vflag)
+		fprintf(stderr, "Setting fragment size to %lu\n",
+			header->header.nbyte);
 
 	/* Let prepare our header, converting everything to Little Endian */
 	bef_prepare_header(&(header->header));
@@ -999,18 +1002,40 @@ int bef_construct(int input, int output, uint64_t bsize,
 	struct bef_header head;
 	size_t lret;
 
-	if(bsize == 0)
+	if(bsize == 0) {
 		bsize = BEF_BSIZE;
-	if(header.par_t == 0)
+		if(vflag)
+			fprintf(stderr, "Setting block size to default %lu\n",
+				bsize);
+	}
+	if(header.par_t == 0) {
 		header.par_t = BEF_PAR_DEFAULT;
-	if(header.hash_t == 0)
+		if(vflag)
+			fprintf(stderr,
+				"Setting parity type to default fec-vand\n");
+	}
+	if(header.hash_t == 0) {
 		header.hash_t = BEF_HASH_DEFAULT;
-	if(header.k == 0)
+		if(vflag)
+			fprintf(stderr,
+				"Setting hash type to default xxhash\n");
+	}
+	if(header.k == 0) {
 		header.k = BEF_K_DEFAULT;
-	if(header.m == 0)
+		if(vflag)
+			fprintf(stderr, "Setting k to default %u\n", header.k);
+	}
+	if(header.m == 0) {
 		header.m = BEF_M_DEFAULT;
-	if(header.il_n == 0)
+		if(vflag)
+			fprintf(stderr, "Setting m to default %u\n", header.m);
+	}
+	if(header.il_n == 0) {
 		header.il_n = BEF_IL_N_DEFAULT;
+		if(vflag)
+			fprintf(stderr, "setting il_n to default %u\n",
+				header.il_n);
+	}
 
 	ret = bef_init(header);
 	if(ret != 0)
@@ -1047,6 +1072,9 @@ int bef_construct(int input, int output, uint64_t bsize,
 
 	if(head.header.nbyte == 0) {
 		ret = -BEF_ERR_INVALINPUT;
+		if(vflag)
+			fprintf(stderr,
+				"ERROR: fragment size must be greater than 0\n");
 		goto out;
 	}
 
@@ -1317,39 +1345,94 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 		if(ret != 0)
 			goto out;
 
-		if(header.k == 0)
+		if(header.k == 0) {
+			if(vflag)
+				fprintf(stderr,
+					"ERROR: Invalid k value in header\n");
 			return -BEF_ERR_INVALINPUT;
-		if(header.nbyte == 0)
+		}
+		if(header.nbyte == 0) {
+			if(vflag)
+				fprintf(stderr,
+					"ERROR: Invalid fragment size in header\n");
 			return -BEF_ERR_INVALINPUT;
-		if(header.il_n == 0)
+		}
+		if(header.il_n == 0) {
+			if(vflag)
+				fprintf(stderr,
+					"ERROR: Invalid il_n value in header\n");
 			return -BEF_ERR_INVALINPUT;
-		if(header.m == 0)
+		}
+		if(header.m == 0) {
+			if(vflag)
+				fprintf(stderr,
+					"ERROR: Invalid m value in header\n");
 			return -BEF_ERR_INVALINPUT;
-		if(header.par_t == 0)
+		}
+		if(header.par_t == 0) {
+			if(vflag)
+				fprintf(stderr,
+					"ERROR: Invalid parity type in header\n");
 			return -BEF_ERR_INVALINPUT;
-		if(header.hash_t == 0)
+		}
+		if(header.hash_t == 0) {
+			if(vflag)
+				fprintf(stderr,
+					"ERROR: Invalid hash type in header\n");
 			return -BEF_ERR_INVALINPUT;
+		}
 	} else {
-		if(header.k == 0)
+		if(header.k == 0) {
 			header.k = BEF_K_DEFAULT;
-		if(header.m == 0)
+			if(vflag)
+				fprintf(stderr,
+					"Setting k to default value %u\n",
+					header.k);
+		}
+		if(header.m == 0) {
 			header.m = BEF_M_DEFAULT;
-		if(header.il_n == 0)
+			if(vflag)
+				fprintf(stderr,
+					"Setting m to default value %u\n",
+					header.m);
+		}
+		if(header.il_n == 0) {
 			header.il_n = BEF_IL_N_DEFAULT;
-		if(header.par_t == 0)
+			if(vflag)
+				fprintf(stderr,
+					"Setting il_n to default value %u\n",
+					header.il_n);
+		}
+		if(header.par_t == 0) {
 			header.par_t = BEF_PAR_DEFAULT;
-		if(header.hash_t == 0)
+			if(vflag)
+				fprintf(stderr,
+					"Setting parity type to default fec-vand\n");
+		}
+		if(header.hash_t == 0) {
 			header.hash_t = BEF_HASH_DEFAULT;
-		if(header.nbyte == 0)
+			if(vflag)
+				fprintf(stderr,
+					"Setting hash type to default xxhash\n");
+		}
+		if(header.nbyte == 0) {
+			if(vflag)
+				fprintf(stderr,
+					"ERROR: fragment size must be greater than 0\n");
 			return -BEF_ERR_INVALINPUT;
+		}
 	}
 
 	ret = bef_init(header);
 	if(ret != 0)
 		return ret;
 
-	if(sbyte == 0)
+	if(sbyte == 0) {
 		sbyte = BEF_SBYTE_DEFAULT;
+		if(vflag)
+			fprintf(stderr, "Setting sbyte to default value %lu",
+				sbyte);
+	}
 
 	if(sbyte >= header.nbyte)
 		sbyte = header.nbyte - 1; //Set to less than fragment size

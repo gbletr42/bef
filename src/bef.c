@@ -34,11 +34,6 @@
 #include <erasurecode.h>
 #endif
 
-/* Use this to check if GCC is compiling, from stackoverflow*/
-#if defined(__GNUC__) && !defined(__llvm__) && !defined(__INTEL_COMPILER)
-#define REAL_GCC //probably
-#endif
-
 #include <string.h>
 #include <xxhash.h>
 #include <stdlib.h>
@@ -48,8 +43,8 @@
 #include <endian.h>
 #include <errno.h>
 #include <sys/stat.h>
-#include <fcntl.h>
 #include <sys/uio.h>
+#include <fcntl.h>
 
 #define BEF_SAFE_READ	0
 #define BEF_SAFE_WRITE	1
@@ -192,7 +187,7 @@ static int bef_init(struct bef_real_header header)
 }
 
 #ifdef BEF_LIBERASURECODE
-static int bef_liberasurecode_destroy()
+static int bef_liberasurecode_destroy(void)
 {
 	int ret;
 
@@ -204,7 +199,7 @@ static int bef_liberasurecode_destroy()
 }
 #endif
 
-static void bef_fec_destroy()
+static void bef_fec_destroy(void)
 {
 	fec_free(bef_context);
 }
@@ -244,8 +239,7 @@ static int bef_destroy(struct bef_real_header header)
  * 3.	Large enough to hold inbyte.
  */
 static uint64_t bef_sky_padding(size_t inbyte,
-				uint16_t il_n, uint16_t k, uint64_t bsize,
-				bef_par_t par_t)
+				uint16_t il_n, uint16_t k, uint64_t bsize)
 {
 	uint64_t common = k * il_n;
 	uint64_t pbyte = il_n * bsize;
@@ -266,7 +260,7 @@ static uint64_t bef_sky_padding(size_t inbyte,
  * GCC and linux are not available, it falls back to the standard read/write
  * interface.
  */
-ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
+static ssize_t bef_safe_rw(int fd, char *buf, size_t nbyte, uint8_t flag)
 {
 	ssize_t ret = 1; //Set to > 0 for loop
 	ssize_t offset = 0;
@@ -289,7 +283,7 @@ ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 	 */
 	while((ret == -1 && (errno == EAGAIN || errno == EINTR)) ||
 	      (offset != nbyte && ret > 0)) {
-#if defined REAL_GCC && defined linux
+#if defined _GNU_SOURCE && defined linux
 		if(pipe_flag == BEF_FD_PIPE)
 			ret = vmsplice(fd, &iov, 1, 0);
 		else if(flag == BEF_SAFE_READ)
@@ -499,8 +493,7 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 #ifdef BEF_LIBERASURECODE
 static int bef_encode_liberasurecode(const char *input, size_t inbyte,
 				     char **data, char **parity,
-				     size_t *frag_len, int k, int m,
-				     bef_par_t par_t)
+				     size_t *frag_len, int k, int m)
 {
 	int ret;
 	char **tmp_data;
@@ -592,7 +585,7 @@ int bef_encode_ecc(const char *input, size_t inbyte, char **data,
 	case BEF_PAR_I_V_RS:
 	case BEF_PAR_I_C_RS:
 		ret = bef_encode_liberasurecode(input, inbyte, data, parity,
-						frag_len, k, m, par_t);
+						frag_len, k, m);
 		break;
 #endif
 	case BEF_PAR_F_V_RS:
@@ -618,8 +611,7 @@ void bef_encode_free(char **data, char **parity, int k, int m)
 #ifdef BEF_LIBERASURECODE
 static int bef_decode_liberasurecode(char **frags, uint16_t frag_len,
 				     size_t frag_b, char **output,
-				     size_t *onbyte, int k, int m,
-				     bef_par_t par_t)
+				     size_t *onbyte)
 {
 	int ret;
 	char *tmp_output;
@@ -739,7 +731,7 @@ int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
 	case BEF_PAR_I_V_RS:
 	case BEF_PAR_I_C_RS:
 		ret = bef_decode_liberasurecode(frags, frag_len, frag_b, output,
-						onbyte, k, m, par_t);
+						onbyte);
 		break;
 #endif
 	case BEF_PAR_F_V_RS:
@@ -789,7 +781,7 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 
 	/* Pad out if necessary */
 	pbyte = bef_sky_padding((size_t) rret, header->header.il_n,
-				header->header.k, bsize, header->header.par_t);
+				header->header.k, bsize);
 	memset(ibuf + rret, '\0', pbyte);
 
 	*lret = (size_t) rret;
@@ -845,7 +837,7 @@ static int bef_construct_frag(char *output, char *body, size_t frag_len,
 	bef_prepare_frag_header(&header);
 
 	/* Set header hash */
-	ret = bef_digest(&header, sizeof(header), header.h_hash,
+	ret = bef_digest((const char *) &header, sizeof(header), header.h_hash,
 			 hash_t);
 	if(ret != 0)
 		return ret;
@@ -908,7 +900,7 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 	char **frags;
 	size_t frag_len = 0;
 	uint64_t pbyte = bef_sky_padding(ibuf_s, header.il_n, header.k,
-					 bsize, header.par_t);
+					 bsize);
 	size_t fbyte = (ibuf_s + pbyte) / header.il_n;
 
 	memset(ibuf + ibuf_s, '\0', pbyte);
@@ -955,8 +947,7 @@ static int bef_construct_encode(int input, int output,
 	char *obuf = bef_malloc(obuf_s);
 	size_t ibuf_s = header.il_n * bsize;
 	uint64_t il_count = 0;
-	ibuf_s += bef_sky_padding(ibuf_s, header.il_n, header.k, bsize,
-				  header.par_t);
+	ibuf_s += bef_sky_padding(ibuf_s, header.il_n, header.k, bsize);
 
 	/* Redo very first few blocks, source still in input */
 	ret = bef_encode_blocks(ibuf, lret, obuf, bsize, il_count++, header);
@@ -1027,8 +1018,7 @@ int bef_construct(int input, int output, uint64_t bsize,
 
 	/* Estimate size of our shared input buffer, using bsize and k */
 	ibuf_s = header.il_n * bsize;
-	ibuf_s += bef_sky_padding(ibuf_s, header.il_n, header.k, bsize,
-				  header.par_t);
+	ibuf_s += bef_sky_padding(ibuf_s, header.il_n, header.k, bsize);
 	ibuf = bef_malloc(ibuf_s);
 
 	head.header = header;
@@ -1040,7 +1030,8 @@ int bef_construct(int input, int output, uint64_t bsize,
 			goto out;
 
 		/* Write our header to output */
-		bret = bef_safe_rw(output, &head, sizeof(head), BEF_SAFE_WRITE);
+		bret = bef_safe_rw(output, (char *) &head, sizeof(head),
+				   BEF_SAFE_WRITE);
 		if(bret != sizeof(head)) {
 			ret = -BEF_ERR_WRITEERR;
 			goto out;
@@ -1139,7 +1130,7 @@ static int bef_deconstruct_header(int input, struct bef_real_header *header)
 	struct bef_header head;
 	uint8_t hash[BEF_HASH_SIZE];
 
-	bret = bef_safe_rw(input, &head, sizeof(head), BEF_SAFE_READ);
+	bret = bef_safe_rw(input, (char *) &head, sizeof(head), BEF_SAFE_READ);
 	if(bret != sizeof(head))
 		return -BEF_ERR_READERR;
 
@@ -1254,7 +1245,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	*ahead = ibuf_s - offset;
 
 	/* If any has less than k good fragments, return with NEEDMORE */
-	for(uint16_t i = 0; i < header.il_n; i++) {
+	for(i = 0; i < header.il_n; i++) {
 		if(index[i] < header.k)
 			return -BEF_ERR_NEEDMORE;
 	}

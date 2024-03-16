@@ -20,8 +20,11 @@
 #define BEF_H	1
 
 /* Our third party libraries */
-#include "../config.h"
 #define _FILE_OFFSET_BITS 64 //Make off_t 64 bits
+#ifdef linux
+#define _GNU_SOURCE
+#endif
+#include "../config.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <sys/types.h>

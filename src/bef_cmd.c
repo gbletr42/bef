@@ -35,7 +35,7 @@
 #define BEF_GIB	(1024 * 1024 * 1024)
 #define BEF_GB	(1000 * 1000 * 1000)
 
-void bef_help() {
+void bef_help(void) {
 printf("bef is a command line utility that encodes and decodes erasure coded streams.\n");
 printf("More information can be found in the manpage\n\n");
 printf("-h|--help			Print this help message\n");

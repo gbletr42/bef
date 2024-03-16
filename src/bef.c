@@ -45,6 +45,7 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <fcntl.h>
+#include <stdio.h>
 
 #define BEF_SAFE_READ	0
 #define BEF_SAFE_WRITE	1

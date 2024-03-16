@@ -42,7 +42,9 @@
 #include <sys/random.h>
 #include <endian.h>
 #include <errno.h>
-#include <sys/param.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/uio.h>
 
 #define BEF_SAFE_READ	0
 #define BEF_SAFE_WRITE	1
@@ -53,7 +55,9 @@
 #define BEF_SCAN_FORWARDS	0
 #define BEF_SCAN_BACKWARDS	1
 
-#define BEF_PIPE_BUF	65535 //One less than full pipe
+#define BEF_PIPE_BUF	65536 //Full pipe
+#define BEF_FD_FILE	0
+#define BEF_FD_PIPE	1
 
 /* Struct for libfec header */
 struct bef_fec_header {
@@ -253,25 +257,41 @@ static uint64_t bef_sky_padding(size_t inbyte,
 	return pbyte;
 }
 
-
+/* This uses vmsplice to optimize reading/writing from a pipe. The potential
+ * performance of this should be in far excess of what we'll actually need.
+ */
 ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 {
 	ssize_t ret = 1; //Set to > 0 for loop
 	size_t inbyte;
 	ssize_t offset = 0;
+	uint8_t pipe_flag = BEF_FD_FILE;
+	struct stat st;
+	struct iovec iov;
 
-	if(nbyte > BEF_PIPE_BUF &&
-	   (fd == STDIN_FILENO || fd == STDOUT_FILENO || fd == STDERR_FILENO))
+	if(fstat(fd, &st) != 0)
+		return -1;
+
+	if(S_ISFIFO(st.st_mode))
+		pipe_flag = BEF_FD_PIPE;
+
+	if(nbyte > BEF_PIPE_BUF && pipe_flag == BEF_FD_PIPE)
 		inbyte = BEF_PIPE_BUF;
 	else
 		inbyte = nbyte;
+
+	/* Set, regardless of whether we actually need it */
+	iov.iov_base = buf;
+	iov.iov_len = inbyte;
 
 	/* Keep trying if interrupted or told to try again, or if buffer is not
 	 * full
 	 */
 	while((ret == -1 && (errno == EAGAIN || errno == EINTR)) ||
 	      (offset != nbyte && ret > 0)) {
-		if(flag == BEF_SAFE_READ)
+		if(pipe_flag == BEF_FD_PIPE)
+			ret = vmsplice(fd, &iov, 1, 0);
+		else if(flag == BEF_SAFE_READ)
 			ret = read(fd, buf + offset, inbyte);
 		else
 			ret = write(fd, buf + offset, inbyte);
@@ -284,6 +304,9 @@ ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 
 			if(nbyte - offset < inbyte)
 				inbyte = nbyte - offset;
+
+			iov.iov_base = buf + offset;
+			iov.iov_len = inbyte;
 		}
 	}
 
@@ -1112,7 +1135,7 @@ static int bef_deconstruct_header(int input, struct bef_real_header *header)
 	struct bef_header head;
 	uint8_t hash[BEF_HASH_SIZE];
 
-	bret = read(input, &head, sizeof(head));
+	bret = bef_safe_rw(input, &head, sizeof(head), BEF_SAFE_READ);
 	if(bret != sizeof(head))
 		return -BEF_ERR_READERR;
 

@@ -39,7 +39,6 @@
 #define REAL_GCC //probably
 #endif
 
-
 #include <string.h>
 #include <xxhash.h>
 #include <stdlib.h>
@@ -61,16 +60,6 @@
 #define BEF_SCAN_FORWARDS	0
 #define BEF_SCAN_BACKWARDS	1
 
-/* When using the vmsplice interface, copy/move the full pipe buffer, but
- * otherwise to keep compatibility with things like tar that only send in a pipe
- * buffer at a time, read one less than the pipe buffer to ensure a continuous
- * stream
- */
-#if defined REAL_GCC && defined linux
-#define BEF_PIPE_BUF	65536 //Full pipe
-#else
-#define BEF_PIPE_BUF	65535 //One less than full pipe
-#endif
 #define BEF_FD_FILE	0
 #define BEF_FD_PIPE	1
 
@@ -280,7 +269,6 @@ static uint64_t bef_sky_padding(size_t inbyte,
 ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 {
 	ssize_t ret = 1; //Set to > 0 for loop
-	size_t inbyte;
 	ssize_t offset = 0;
 	uint8_t pipe_flag = BEF_FD_FILE;
 	struct stat st;
@@ -292,14 +280,9 @@ ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 	if(S_ISFIFO(st.st_mode))
 		pipe_flag = BEF_FD_PIPE;
 
-	if(nbyte > BEF_PIPE_BUF && pipe_flag == BEF_FD_PIPE)
-		inbyte = BEF_PIPE_BUF;
-	else
-		inbyte = nbyte;
-
 	/* Set, regardless of whether we actually need it */
 	iov.iov_base = buf;
-	iov.iov_len = inbyte;
+	iov.iov_len = nbyte - offset;
 
 	/* Keep trying if interrupted or told to try again, or if buffer is not
 	 * full
@@ -310,14 +293,14 @@ ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 		if(pipe_flag == BEF_FD_PIPE)
 			ret = vmsplice(fd, &iov, 1, 0);
 		else if(flag == BEF_SAFE_READ)
-			ret = read(fd, buf + offset, inbyte);
+			ret = read(fd, buf + offset, nbyte - offset);
 		else
-			ret = write(fd, buf + offset, inbyte);
+			ret = write(fd, buf + offset, nbyte - offset);
 #else
 		if(flag == BEF_SAFE_READ)
-			ret = read(fd, buf + offset, inbyte);
+			ret = read(fd, buf + offset, nbyte - offset);
 		else
-			ret = write(fd, buf + offset, inbyte);
+			ret = write(fd, buf + offset, nbyte - offset);
 #endif
 
 		if(ret > 0) {
@@ -326,11 +309,8 @@ ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 			else
 				return -1;
 
-			if(nbyte - offset < inbyte)
-				inbyte = nbyte - offset;
-
 			iov.iov_base = buf + offset;
-			iov.iov_len = inbyte;
+			iov.iov_len = nbyte - offset;
 		}
 	}
 

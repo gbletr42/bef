@@ -34,6 +34,12 @@
 #include <erasurecode.h>
 #endif
 
+/* Use this to check if GCC is compiling, from stackoverflow*/
+#if defined(__GNUC__) && !defined(__llvm__) && !defined(__INTEL_COMPILER)
+#define REAL_GCC //probably
+#endif
+
+
 #include <string.h>
 #include <xxhash.h>
 #include <stdlib.h>
@@ -55,7 +61,16 @@
 #define BEF_SCAN_FORWARDS	0
 #define BEF_SCAN_BACKWARDS	1
 
+/* When using the vmsplice interface, copy/move the full pipe buffer, but
+ * otherwise to keep compatibility with things like tar that only send in a pipe
+ * buffer at a time, read one less than the pipe buffer to ensure a continuous
+ * stream
+ */
+#if defined REAL_GCC && defined linux
 #define BEF_PIPE_BUF	65536 //Full pipe
+#else
+#define BEF_PIPE_BUF	65535 //One less than full pipe
+#endif
 #define BEF_FD_FILE	0
 #define BEF_FD_PIPE	1
 
@@ -258,7 +273,9 @@ static uint64_t bef_sky_padding(size_t inbyte,
 }
 
 /* This uses vmsplice to optimize reading/writing from a pipe. The potential
- * performance of this should be in far excess of what we'll actually need.
+ * performance of this should be in far excess of what we'll actually need. If
+ * GCC and linux are not available, it falls back to the standard read/write
+ * interface.
  */
 ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 {
@@ -289,12 +306,19 @@ ssize_t bef_safe_rw(int fd, void *buf, size_t nbyte, uint8_t flag)
 	 */
 	while((ret == -1 && (errno == EAGAIN || errno == EINTR)) ||
 	      (offset != nbyte && ret > 0)) {
+#if defined REAL_GCC && defined linux
 		if(pipe_flag == BEF_FD_PIPE)
 			ret = vmsplice(fd, &iov, 1, 0);
 		else if(flag == BEF_SAFE_READ)
 			ret = read(fd, buf + offset, inbyte);
 		else
 			ret = write(fd, buf + offset, inbyte);
+#else
+		if(flag == BEF_SAFE_READ)
+			ret = read(fd, buf + offset, inbyte);
+		else
+			ret = write(fd, buf + offset, inbyte);
+#endif
 
 		if(ret > 0) {
 			if(SSIZE_MAX - offset > ret) //to check for overflow

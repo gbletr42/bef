@@ -1232,13 +1232,12 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	int ret;
 	uint16_t index[header.il_n];
 	uint16_t i;
-	uint16_t found = 0;
 	uint8_t flag = BEF_SCAN_FORWARDS;
 	struct bef_frag_header frag_h;
 	size_t offset = 0;
 	memset(index, '\0', header.il_n * sizeof(*index));
 
-	for(; found < header.il_n && offset < ibuf_s - (sbyte + header.nbyte);
+	for(; offset < ibuf_s - (sbyte + header.nbyte);
 	    offset += header.nbyte) {
 		ret = bef_scan_fragment(ibuf, &offset, sbyte, flag, header);
 		if(ret != 0) {
@@ -1272,8 +1271,6 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 				       ibuf + offset + sizeof(frag_h),
 				       header.nbyte - sizeof(frag_h));
 				index[i] += 1;
-				if(index[i] == header.k)
-					found++;
 			}
 		}
 	}

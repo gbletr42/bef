@@ -520,7 +520,7 @@ static int bef_encode_liberasurecode(const char *input, size_t inbyte,
 static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 			     char **parity, size_t *frag_len, int k, int m)
 {
-	struct bef_fec_header header;
+	struct bef_fec_header header = {0};
 	size_t size = inbyte / k; //Size of each data fragment, prepadded
 	unsigned int block_nums[m];
 	*frag_len = sizeof(header) + size;

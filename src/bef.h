@@ -247,4 +247,7 @@ void *bef_calloc(size_t nmemb, size_t sz);
 void *bef_realloc(void *ptr, size_t sz);
 void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz);
 
+/* Get max number of fragments for a given parity type */
+uint16_t bef_max_frag(bef_par_t par_t);
+
 #endif /* BEF_H */

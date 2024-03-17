@@ -98,6 +98,34 @@ void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz)
 	return ptr;
 }
 
+uint16_t bef_max_frag(bef_par_t par_t)
+{
+	uint16_t ret;
+
+	switch(par_t) {
+#ifdef BEF_LIBERASURECODE
+	case BEF_PAR_J_V_RS:
+	case BEF_PAR_LE_V_RS:
+	case BEF_PAR_I_V_RS:
+	case BEF_PAR_I_C_RS:
+		ret = 32;
+		break;
+	case BEF_PAR_J_C_RS:
+		ret = 16;
+		break;
+#endif
+	case 0:
+	case BEF_PAR_F_V_RS:
+		ret = 256;
+		break;
+	default:
+		ret = 0;
+		break;
+	}
+
+	return ret;
+}
+
 #ifdef BEF_LIBERASURECODE
 static ec_backend_id_t bef_liberasurecode_par_switch(bef_par_t par_t)
 {

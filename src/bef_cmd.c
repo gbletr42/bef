@@ -346,9 +346,16 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	if(header.k + header.m > bef_max_frag(header.par_t)) {
+		fprintf(stderr,
+			"ERROR: number of fragments (%u) is greater than the maximum number for this parity type (%u)\n",
+			header.k + header.m, bef_max_frag(header.par_t));
+		exit(-BEF_ERR_INVALINPUT);
+	}
+
 	if(cflag && dflag) {
 		fprintf(stderr,
-			"Can't construct and deconstruct at the same time\n");
+			"ERROR: Can't construct and deconstruct at the same time\n");
 		exit(-BEF_ERR_INVALINPUT);
 	}
 

@@ -130,7 +130,7 @@ static ec_backend_id_t bef_liberasurecode_par_switch(bef_par_t par_t)
 static int bef_liberasurecode_init(bef_par_t par_t, uint16_t k, uint16_t m)
 {
 	ec_backend_id_t backend_id;
-	struct ec_args args;
+	struct ec_args args = {0};
 	int ret;
 	args.k = k;
 	args.m = args.hd = m; //Only support RS for now

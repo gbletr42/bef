@@ -188,7 +188,7 @@ int main(int argc, char **argv) {
 			exit(EXIT_SUCCESS);
 			break;
 		case 'v':
-			vflag = 1;
+			vflag++;
 			break;
 		case 'c':
 			cflag = 1;

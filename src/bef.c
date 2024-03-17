@@ -253,59 +253,40 @@ static uint64_t bef_sky_padding(size_t inbyte,
 	else
 		pbyte = 0;
 
+	if(vflag > 1)
+		fprintf(stderr, "Padded %lu bytes to %zu input bytes\n",
+			pbyte, inbyte);
+
 	return pbyte;
 }
 
-/* This uses vmsplice to optimize reading/writing from a pipe. The potential
- * performance of this should be in far excess of what we'll actually need. If
- * GCC and linux are not available, it falls back to the standard read/write
- * interface.
- */
 static ssize_t bef_safe_rw(int fd, char *buf, size_t nbyte, uint8_t flag)
 {
 	ssize_t ret = 1; //Set to > 0 for loop
 	ssize_t offset = 0;
-	uint8_t pipe_flag = BEF_FD_FILE;
-	struct stat st;
-	struct iovec iov;
-
-	if(fstat(fd, &st) != 0)
-		return -1;
-
-	if(S_ISFIFO(st.st_mode))
-		pipe_flag = BEF_FD_PIPE;
-
-	/* Set, regardless of whether we actually need it */
-	iov.iov_base = buf;
-	iov.iov_len = nbyte - offset;
 
 	/* Keep trying if interrupted or told to try again, or if buffer is not
 	 * full
 	 */
 	while((ret == -1 && (errno == EAGAIN || errno == EINTR)) ||
 	      (offset != nbyte && ret > 0)) {
-#if defined _GNU_SOURCE && defined linux
-		if(pipe_flag == BEF_FD_PIPE)
-			ret = vmsplice(fd, &iov, 1, 0);
-		else if(flag == BEF_SAFE_READ)
+		if(flag == BEF_SAFE_READ) {
 			ret = read(fd, buf + offset, nbyte - offset);
-		else
+			if(vflag > 1)
+				fprintf(stderr, "read %zd bytes from %d, amount left %zu\n",
+					ret, fd, nbyte - offset - ret);
+		} else {
 			ret = write(fd, buf + offset, nbyte - offset);
-#else
-		if(flag == BEF_SAFE_READ)
-			ret = read(fd, buf + offset, nbyte - offset);
-		else
-			ret = write(fd, buf + offset, nbyte - offset);
-#endif
+			if(vflag > 1)
+				fprintf(stderr, "wrote %zd bytes to %d, amount left %zu\n",
+					ret, fd, nbyte - offset - ret);
+		}
 
 		if(ret > 0) {
 			if(SSIZE_MAX - offset > ret) //to check for overflow
 				offset += ret;
 			else
 				return -1;
-
-			iov.iov_base = buf + offset;
-			iov.iov_len = nbyte - offset;
 		}
 	}
 
@@ -442,6 +423,11 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 	const EVP_MD *(*f_evp)(void) = NULL; //for OpenSSL
 #endif
 
+	if(vflag > 2)
+		fprintf(stderr,
+			"Hashing %zu bytes of input with hash type %u\n",
+			nbyte, hash_t);
+
 	/* Ensure the output is clean first */
 	memset(output, '\0', BEF_HASH_SIZE);
 
@@ -577,6 +563,11 @@ int bef_encode_ecc(const char *input, size_t inbyte, char **data,
 		   bef_par_t par_t)
 {
 	int ret = 0;
+
+	if(vflag > 1)
+		fprintf(stderr,
+			"Encoding %zu bytes, k %d, m %d, parity type %u\n",
+			inbyte, k, m, par_t);
 
 	switch(par_t) {
 #ifdef BEF_LIBERASURECODE
@@ -720,9 +711,14 @@ int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
 	else if(frag_len == 0)
 		return -BEF_ERR_INVALINPUT;
 
-	/* All our codes require at least one parity, including BEF_PAR_NONE */
+	/* All our codes require at least one parity */
 	if(m == 0)
 		return -BEF_ERR_INVALINPUT;
+
+	if(vflag > 1)
+		fprintf(stderr,
+			"Decoding %zu bytes, k %d, m %d, parity type %u\n",
+			frag_b * frag_len, k, m, par_t);
 
 	switch(par_t) {
 #ifdef BEF_LIBERASURECODE
@@ -1125,6 +1121,8 @@ static int bef_verify_fragment(char *frag, uint64_t nbyte, bef_hash_t hash_t,
 
 	/* Compare our two hashes */
 	if(memcmp(target_hash, hash, sizeof(hash)) != 0) {
+		if(vflag)
+			fprintf(stderr, "ERROR: fragment corrupted!\n");
 		return -BEF_ERR_INVALHASH;
 	} else
 		return 0;
@@ -1177,6 +1175,8 @@ static int bef_deconstruct_header(int input, struct bef_real_header *header)
 		if(ret != 0)
 			return ret;
 		if(memcmp(hash, head.hash, BEF_HASH_SIZE) != 0) {
+			if(vflag)
+				fprintf(stderr, "ERROR: Header corrupted!\n");
 			return -BEF_ERR_INVALHEAD; //How sad!
 		} else
 			*header = head.header_b;
@@ -1215,6 +1215,10 @@ static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
 
 		*offset += 1;
 	}
+
+	if(vflag)
+		fprintf(stderr,
+			"ERROR: fragment not found within scan distance\n");
 
 	return -BEF_ERR_NEEDMORE;
 }
@@ -1275,8 +1279,14 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 
 	/* If any has less than k good fragments, return with NEEDMORE */
 	for(i = 0; i < header.il_n; i++) {
-		if(index[i] < header.k)
+		if(index[i] < header.k) {
+			if(vflag)
+				fprintf(stderr, "ERROR: Block %lu does not have k (%u) intact fragments",
+					il_count * header.il_n - header.il_n + i,
+					header.k);
+
 			return -BEF_ERR_NEEDMORE;
+		}
 	}
 
 	return 0;
@@ -1431,7 +1441,7 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	if(sbyte == 0) {
 		sbyte = BEF_SBYTE_DEFAULT;
 		if(vflag)
-			fprintf(stderr, "Setting sbyte to default value %lu",
+			fprintf(stderr, "Setting sbyte to default value %lu\n",
 				sbyte);
 	}
 
@@ -1468,6 +1478,9 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 		/* Check for integer overflow */
 		if(obuf_s - pbyte > obuf_s){//Impossible, unless overflowed
 			ret = -BEF_ERR_OVERFLOW;
+			if(vflag)
+				fprintf(stderr,
+					"ERROR: padded bytes overflowed\n");
 			goto out;
 		}
 

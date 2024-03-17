@@ -1121,8 +1121,10 @@ static int bef_verify_fragment(char *frag, uint64_t nbyte, bef_hash_t hash_t,
 
 	/* Compare our two hashes */
 	if(memcmp(target_hash, hash, sizeof(hash)) != 0) {
-		if(vflag)
-			fprintf(stderr, "ERROR: fragment corrupted!\n");
+		/*
+		 *if(vflag)
+		 *	fprintf(stderr, "ERROR: fragment corrupted!\n");
+		 */
 		return -BEF_ERR_INVALHASH;
 	} else
 		return 0;

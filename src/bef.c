@@ -749,7 +749,7 @@ void bef_decode_free(char *output)
 
 static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 				uint64_t bsize, size_t *lret,
-				struct bef_header *header)
+				struct bef_header *header, uint8_t raw_f)
 {
 	int ret;
 	ssize_t rret;
@@ -791,8 +791,18 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 	if(ret != 0)
 		goto out;
 
+	if(raw_f != 0 &&
+	   header->header.nbyte != frag_len + sizeof(struct bef_frag_header)) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: Given fragment size does not match! Expected %lu\n",
+				frag_len + sizeof(struct bef_frag_header));
+		ret = -BEF_ERR_INVALINPUT;
+		goto out;
+	}
+
 	header->header.nbyte = (uint64_t) (frag_len + sizeof(struct bef_frag_header));
-	if(bef_vflag)
+	if(bef_vflag && raw_f == 0)
 		fprintf(stderr, "Setting fragment size to %lu\n",
 			header->header.nbyte);
 
@@ -1030,7 +1040,7 @@ int bef_construct(int input, int output, uint64_t bsize,
 	if(header.il_n == 0) {
 		header.il_n = BEF_IL_N_DEFAULT;
 		if(bef_vflag)
-			fprintf(stderr, "setting il_n to default %u\n",
+			fprintf(stderr, "Setting il_n to default %u\n",
 				header.il_n);
 	}
 
@@ -1045,12 +1055,12 @@ int bef_construct(int input, int output, uint64_t bsize,
 
 	head.header = header;
 
-	if(raw_f == 0) {
-		ret = bef_construct_header(input, ibuf, ibuf_s, bsize, &lret,
-					   &head);
-		if(ret != 0)
-			goto out;
+	ret = bef_construct_header(input, ibuf, ibuf_s, bsize, &lret,
+				   &head, raw_f);
+	if(ret != 0)
+		goto out;
 
+	if(raw_f == 0) {
 		/* Write our header to output */
 		bret = bef_safe_rw(output, (char *) &head, sizeof(head),
 				   BEF_SAFE_WRITE);
@@ -1058,13 +1068,6 @@ int bef_construct(int input, int output, uint64_t bsize,
 			ret = -BEF_ERR_WRITEERR;
 			goto out;
 		}
-	} else {
-		bret = bef_safe_rw(input, ibuf, ibuf_s, BEF_SAFE_READ);
-		if(bret == -1) {
-			ret = -BEF_ERR_READERR;
-			goto out;
-		}
-		lret = (size_t) bret;
 	}
 
 	if(head.header.nbyte == 0) {

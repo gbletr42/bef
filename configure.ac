@@ -16,7 +16,7 @@ dnl You should have received a copy of the GNU General Public License along with
 dnl this program. If not, see <https://www.gnu.org/licenses/>.
 
 AC_PREREQ(2.62)
-AC_INIT([bef], [0.01], [gbletr42@gmail.com])
+AC_INIT([bef], [0.2.2], [gbletr42@gmail.com])
 AC_CONFIG_SRCDIR([src/bef.c])
 
 AC_CONFIG_HEADERS([config.h])

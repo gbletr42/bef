@@ -184,7 +184,7 @@ int main(int argc, char **argv) {
 			exit(EXIT_SUCCESS);
 			break;
 		case 'V':
-			printf("bef version v0.2\n");
+			printf("bef version v0.2.2\n");
 			exit(EXIT_SUCCESS);
 			break;
 		case 'v':

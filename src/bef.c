@@ -253,7 +253,7 @@ static uint64_t bef_sky_padding(size_t inbyte,
 	else
 		pbyte = 0;
 
-	if(vflag > 1)
+	if(bef_vflag > 1)
 		fprintf(stderr, "Padded %lu bytes to %zu input bytes\n",
 			pbyte, inbyte);
 
@@ -272,12 +272,12 @@ static ssize_t bef_safe_rw(int fd, char *buf, size_t nbyte, uint8_t flag)
 	      (offset != nbyte && ret > 0)) {
 		if(flag == BEF_SAFE_READ) {
 			ret = read(fd, buf + offset, nbyte - offset);
-			if(vflag > 1)
+			if(bef_vflag > 1)
 				fprintf(stderr, "read %zd bytes from %d, amount left %zu\n",
 					ret, fd, nbyte - offset - ret);
 		} else {
 			ret = write(fd, buf + offset, nbyte - offset);
-			if(vflag > 1)
+			if(bef_vflag > 1)
 				fprintf(stderr, "wrote %zd bytes to %d, amount left %zu\n",
 					ret, fd, nbyte - offset - ret);
 		}
@@ -423,7 +423,7 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 	const EVP_MD *(*f_evp)(void) = NULL; //for OpenSSL
 #endif
 
-	if(vflag > 2)
+	if(bef_vflag > 2)
 		fprintf(stderr,
 			"Hashing %zu bytes of input with hash type %u\n",
 			nbyte, hash_t);
@@ -564,7 +564,7 @@ int bef_encode_ecc(const char *input, size_t inbyte, char **data,
 {
 	int ret = 0;
 
-	if(vflag > 1)
+	if(bef_vflag > 1)
 		fprintf(stderr,
 			"Encoding %zu bytes, k %d, m %d, parity type %u\n",
 			inbyte, k, m, par_t);
@@ -715,7 +715,7 @@ int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
 	if(m == 0)
 		return -BEF_ERR_INVALINPUT;
 
-	if(vflag > 1)
+	if(bef_vflag > 1)
 		fprintf(stderr,
 			"Decoding %zu bytes, k %d, m %d, parity type %u\n",
 			frag_b * frag_len, k, m, par_t);
@@ -792,7 +792,7 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 		goto out;
 
 	header->header.nbyte = (uint64_t) (frag_len + sizeof(struct bef_frag_header));
-	if(vflag)
+	if(bef_vflag)
 		fprintf(stderr, "Setting fragment size to %lu\n",
 			header->header.nbyte);
 
@@ -1001,35 +1001,35 @@ int bef_construct(int input, int output, uint64_t bsize,
 
 	if(bsize == 0) {
 		bsize = BEF_BSIZE;
-		if(vflag)
+		if(bef_vflag)
 			fprintf(stderr, "Setting block size to default %lu\n",
 				bsize);
 	}
 	if(header.par_t == 0) {
 		header.par_t = BEF_PAR_DEFAULT;
-		if(vflag)
+		if(bef_vflag)
 			fprintf(stderr,
 				"Setting parity type to default fec-vand\n");
 	}
 	if(header.hash_t == 0) {
 		header.hash_t = BEF_HASH_DEFAULT;
-		if(vflag)
+		if(bef_vflag)
 			fprintf(stderr,
 				"Setting hash type to default xxhash\n");
 	}
 	if(header.k == 0) {
 		header.k = BEF_K_DEFAULT;
-		if(vflag)
+		if(bef_vflag)
 			fprintf(stderr, "Setting k to default %u\n", header.k);
 	}
 	if(header.m == 0) {
 		header.m = BEF_M_DEFAULT;
-		if(vflag)
+		if(bef_vflag)
 			fprintf(stderr, "Setting m to default %u\n", header.m);
 	}
 	if(header.il_n == 0) {
 		header.il_n = BEF_IL_N_DEFAULT;
-		if(vflag)
+		if(bef_vflag)
 			fprintf(stderr, "setting il_n to default %u\n",
 				header.il_n);
 	}
@@ -1069,7 +1069,7 @@ int bef_construct(int input, int output, uint64_t bsize,
 
 	if(head.header.nbyte == 0) {
 		ret = -BEF_ERR_INVALINPUT;
-		if(vflag)
+		if(bef_vflag)
 			fprintf(stderr,
 				"ERROR: fragment size must be greater than 0\n");
 		goto out;
@@ -1122,7 +1122,7 @@ static int bef_verify_fragment(char *frag, uint64_t nbyte, bef_hash_t hash_t,
 	/* Compare our two hashes */
 	if(memcmp(target_hash, hash, sizeof(hash)) != 0) {
 		/*
-		 *if(vflag)
+		 *if(bef_vflag)
 		 *	fprintf(stderr, "ERROR: fragment corrupted!\n");
 		 */
 		return -BEF_ERR_INVALHASH;
@@ -1177,7 +1177,7 @@ static int bef_deconstruct_header(int input, struct bef_real_header *header)
 		if(ret != 0)
 			return ret;
 		if(memcmp(hash, head.hash, BEF_HASH_SIZE) != 0) {
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr, "ERROR: Header corrupted!\n");
 			return -BEF_ERR_INVALHEAD; //How sad!
 		} else
@@ -1218,7 +1218,7 @@ static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
 		*offset += 1;
 	}
 
-	if(vflag)
+	if(bef_vflag)
 		fprintf(stderr,
 			"ERROR: fragment not found within scan distance\n");
 
@@ -1282,7 +1282,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	/* If any has less than k good fragments, return with NEEDMORE */
 	for(i = 0; i < header.il_n; i++) {
 		if(index[i] < header.k) {
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr, "ERROR: Block %lu does not have k (%u) intact fragments",
 					il_count * header.il_n - header.il_n + i,
 					header.k);
@@ -1359,37 +1359,37 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 			goto out;
 
 		if(header.k == 0) {
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: Invalid k value in header\n");
 			return -BEF_ERR_INVALINPUT;
 		}
 		if(header.nbyte == 0) {
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: Invalid fragment size in header\n");
 			return -BEF_ERR_INVALINPUT;
 		}
 		if(header.il_n == 0) {
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: Invalid il_n value in header\n");
 			return -BEF_ERR_INVALINPUT;
 		}
 		if(header.m == 0) {
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: Invalid m value in header\n");
 			return -BEF_ERR_INVALINPUT;
 		}
 		if(header.par_t == 0) {
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: Invalid parity type in header\n");
 			return -BEF_ERR_INVALINPUT;
 		}
 		if(header.hash_t == 0) {
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: Invalid hash type in header\n");
 			return -BEF_ERR_INVALINPUT;
@@ -1397,39 +1397,39 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	} else {
 		if(header.k == 0) {
 			header.k = BEF_K_DEFAULT;
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"Setting k to default value %u\n",
 					header.k);
 		}
 		if(header.m == 0) {
 			header.m = BEF_M_DEFAULT;
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"Setting m to default value %u\n",
 					header.m);
 		}
 		if(header.il_n == 0) {
 			header.il_n = BEF_IL_N_DEFAULT;
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"Setting il_n to default value %u\n",
 					header.il_n);
 		}
 		if(header.par_t == 0) {
 			header.par_t = BEF_PAR_DEFAULT;
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"Setting parity type to default fec-vand\n");
 		}
 		if(header.hash_t == 0) {
 			header.hash_t = BEF_HASH_DEFAULT;
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"Setting hash type to default xxhash\n");
 		}
 		if(header.nbyte == 0) {
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: fragment size must be greater than 0\n");
 			return -BEF_ERR_INVALINPUT;
@@ -1442,7 +1442,7 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 
 	if(sbyte == 0) {
 		sbyte = BEF_SBYTE_DEFAULT;
-		if(vflag)
+		if(bef_vflag)
 			fprintf(stderr, "Setting sbyte to default value %lu\n",
 				sbyte);
 	}
@@ -1480,7 +1480,7 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 		/* Check for integer overflow */
 		if(obuf_s - pbyte > obuf_s){//Impossible, unless overflowed
 			ret = -BEF_ERR_OVERFLOW;
-			if(vflag)
+			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: padded bytes overflowed\n");
 			goto out;

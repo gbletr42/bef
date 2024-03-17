@@ -36,7 +36,7 @@
 #define BEF_GB	(1000 * 1000 * 1000)
 
 /* Our verbosity flag */
-uint8_t vflag = 0;
+uint8_t bef_vflag = 0;
 
 void bef_help(void) {
 printf("bef is a command line utility that encodes and decodes erasure coded streams.\n");
@@ -188,7 +188,7 @@ int main(int argc, char **argv) {
 			exit(EXIT_SUCCESS);
 			break;
 		case 'v':
-			vflag++;
+			bef_vflag++;
 			break;
 		case 'c':
 			cflag = 1;

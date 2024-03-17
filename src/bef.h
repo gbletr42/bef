@@ -34,7 +34,7 @@
 static const char *bef_magic = "BEFBABE";
 
 /* Verbosity Flag */
-extern uint8_t vflag;
+extern uint8_t bef_vflag;
 
 /* Our error codes
  * In general, all error codes are negative, and all positive returns are errors

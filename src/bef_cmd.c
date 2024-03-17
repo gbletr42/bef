@@ -38,6 +38,12 @@
 /* Our verbosity flag */
 uint8_t bef_vflag = 0;
 
+/* Our raw flag */
+uint8_t bef_rflag = 0;
+
+/* Our padding flag */
+uint8_t bef_mflag = 0;
+
 void bef_help(void) {
 printf("bef is a command line utility that encodes and decodes erasure coded streams.\n");
 printf("More information can be found in the manpage\n\n");
@@ -46,6 +52,8 @@ printf("-V|--version			Print version of bef\n");
 printf("-v|--verbose			Print verbose output to stderr\n");
 printf("-c|--construct|--encode		Constructs a new BEF file\n");
 printf("-d|--deconstruct|--decode	Deconstructs an existing BEF file\n");
+printf("-M|--minimize			Minimize the given block size if the incoming\n");
+printf("				stream is small\n");
 printf("-p|--preset			Set the arguments to a given preset\n");
 printf("-r|--raw			Flag to disable reading and/or writing the\n");
 printf("				header, You must provide the fragment size to\n");
@@ -142,7 +150,6 @@ int main(int argc, char **argv) {
 	int opt;
 	int cflag = 0;
 	int dflag = 0;
-	int rflag = 0;
 	struct bef_real_header header = {0};
 	uint64_t bsize = 0;
 	uint64_t sbyte = 0;
@@ -162,6 +169,7 @@ int main(int argc, char **argv) {
 				{"encode", no_argument, 0, 'c'},
 				{"deconstruct", no_argument, 0, 'd'},
 				{"decode", no_argument, 0, 'd'},
+				{"minimize", no_argument, 0, 'M'},
 				{"preset", required_argument, 0, 'p'},
 				{"raw", required_argument, 0, 'r'},
 				{"bsize", required_argument, 0, 'b'},
@@ -176,7 +184,7 @@ int main(int argc, char **argv) {
 				{0, 0, 0, 0}
 			};
 
-	while ((opt = getopt_long(argc, argv, "hVvcdp:r:k:m:b:l:P:H:s:i:o:",
+	while ((opt = getopt_long(argc, argv, "hVvcdMp:r:k:m:b:l:P:H:s:i:o:",
 				  long_options, &opt_index)) != -1) {
 		switch(opt) {
 		case 'h':
@@ -195,6 +203,9 @@ int main(int argc, char **argv) {
 			break;
 		case 'd':
 			dflag = 1;
+			break;
+		case 'M':
+			bef_mflag = 1;
 			break;
 		case 'p':
 			if(strcmp(optarg, "standard") == 0)
@@ -215,7 +226,7 @@ int main(int argc, char **argv) {
 			}
 			break;
 		case 'r':
-			rflag = 1;
+			bef_rflag = 1;
 			header.nbyte = (uint64_t) strtoll(optarg, &suffix, 10);
 			if((header.nbyte == UINT64_MAX || header.nbyte == 0) &&
 			   errno == ERANGE) {
@@ -342,10 +353,10 @@ int main(int argc, char **argv) {
 	}
 
 	if(cflag) {
-		ret = bef_construct(input, output, bsize, header, rflag);
+		ret = bef_construct(input, output, bsize, header);
 		return ret;
 	} else if(dflag) {
-		ret = bef_deconstruct(input, output, header, rflag, sbyte);
+		ret = bef_deconstruct(input, output, header, sbyte);
 		return ret;
 	}
 }

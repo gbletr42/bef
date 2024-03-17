@@ -747,9 +747,9 @@ void bef_decode_free(char *output)
 	free(output);
 }
 
-static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
-				uint64_t bsize, size_t *lret,
-				struct bef_header *header, uint8_t raw_f)
+static int bef_construct_header(int input, char **ibuf, size_t *ibuf_s,
+				uint64_t *bsize, size_t *lret,
+				struct bef_header *header)
 {
 	int ret;
 	ssize_t rret;
@@ -770,28 +770,44 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 	 * and wrong, but unless you want like 4 fragments in total, it'll be
 	 * fine!
 	 */
-	rret = bef_safe_rw(input, ibuf, ibuf_s, BEF_SAFE_READ);
+	rret = bef_safe_rw(input, *ibuf, *ibuf_s, BEF_SAFE_READ);
 	if(rret == -1 || rret == 0) {
 		ret = -BEF_ERR_READERR;
 		goto out;
 	}
 
+	/* When getting less data from read, minimize block size instead,
+	 * only do this when minimize flag is enabled, as it decreases the burst
+	 * error size but leads to a much smaller file
+	 */
+	if(rret < *bsize * header->header.il_n && bef_mflag != 0) {
+		*bsize = rret / header->header.il_n;
+		*ibuf_s = header->header.il_n * *bsize;
+		*ibuf_s += bef_sky_padding(*ibuf_s, header->header.il_n,
+					   header->header.k, *bsize);
+		*ibuf = bef_realloc(*ibuf, *ibuf_s);
+		if(bef_vflag)
+			fprintf(stderr, "Minimizing block size to %lu\n",
+				*bsize);
+	}
+
 	/* Pad out if necessary */
 	pbyte = bef_sky_padding((size_t) rret, header->header.il_n,
-				header->header.k, bsize);
-	memset(ibuf + rret, '\0', pbyte);
+				header->header.k, *bsize);
+	memset(*ibuf + rret, '\0', pbyte);
 
 	*lret = (size_t) rret;
 
-	if(rret != ibuf_s / header->header.il_n)
-		rret = ibuf_s / header->header.il_n; //Set to size of one block
+	/* Set to size of one block */
+	if(rret != *ibuf_s / header->header.il_n)
+		rret = *ibuf_s / header->header.il_n;
 
-	ret = bef_encode_ecc(ibuf, rret, data, parity, &frag_len,
+	ret = bef_encode_ecc(*ibuf, rret, data, parity, &frag_len,
 			     k, m, header->header.par_t);
 	if(ret != 0)
 		goto out;
 
-	if(raw_f != 0 &&
+	if(bef_rflag != 0 &&
 	   header->header.nbyte != frag_len + sizeof(struct bef_frag_header)) {
 		if(bef_vflag)
 			fprintf(stderr,
@@ -802,7 +818,7 @@ static int bef_construct_header(int input, char *ibuf, size_t ibuf_s,
 	}
 
 	header->header.nbyte = (uint64_t) (frag_len + sizeof(struct bef_frag_header));
-	if(bef_vflag && raw_f == 0)
+	if(bef_vflag && bef_rflag == 0)
 		fprintf(stderr, "Setting fragment size to %lu\n",
 			header->header.nbyte);
 
@@ -1000,7 +1016,7 @@ out:
 
 /* Our lovely file constructor! Split in two parts ^_^ */
 int bef_construct(int input, int output, uint64_t bsize,
-		  struct bef_real_header header, uint8_t raw_f)
+		  struct bef_real_header header)
 {
 	int ret;
 	ssize_t bret;
@@ -1055,12 +1071,12 @@ int bef_construct(int input, int output, uint64_t bsize,
 
 	head.header = header;
 
-	ret = bef_construct_header(input, ibuf, ibuf_s, bsize, &lret,
-				   &head, raw_f);
+	ret = bef_construct_header(input, &ibuf, &ibuf_s, &bsize, &lret,
+				   &head);
 	if(ret != 0)
 		goto out;
 
-	if(raw_f == 0) {
+	if(bef_rflag == 0) {
 		/* Write our header to output */
 		bret = bef_safe_rw(output, (char *) &head, sizeof(head),
 				   BEF_SAFE_WRITE);
@@ -1343,7 +1359,7 @@ out:
  * complicated accounting for deletions.
  */
 int bef_deconstruct(int input, int output, struct bef_real_header header,
-		    uint8_t raw_f, size_t sbyte)
+		    size_t sbyte)
 {
 	int ret = 0;
 	ssize_t bret;
@@ -1355,7 +1371,7 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	size_t ahead = 0; //Number of bytes read ahead, when scanning.
 	uint64_t il_count = 1; //Number of interleaved sets we've gone through
 
-	if(raw_f == 0) {
+	if(bef_rflag == 0) {
 		/* Get our header and verify its sanity */
 		ret = bef_deconstruct_header(input, &header);
 		if(ret != 0)
@@ -1444,14 +1460,11 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 		return ret;
 
 	if(sbyte == 0) {
-		sbyte = BEF_SBYTE_DEFAULT;
+		sbyte = header.nbyte / 2;
 		if(bef_vflag)
-			fprintf(stderr, "Setting sbyte to default value %lu\n",
+			fprintf(stderr, "Setting sbyte to default value %lu (half of fragment size)\n",
 				sbyte);
 	}
-
-	if(sbyte >= header.nbyte)
-		sbyte = header.nbyte - 1; //Set to less than fragment size
 
 	/* Allocate our buffers */
 	ibuf_s = (header.k + header.m) * header.nbyte * header.il_n;

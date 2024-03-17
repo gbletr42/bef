@@ -50,6 +50,9 @@ Constructs a BEF file from the given input file and outputs it to the given outp
 \fB\-d\fR, \fB\-\-deconstruct\fR, \fB\-\-decode\fR
 Inverse of the above, deconstructs a received BEF file from input and outputs the real data to output.
 .TP
+\fB\-M\fR, \fB\-\-minimize\fR
+Enables the minimize flag, which modifies the behavior of the constructor such that when the given stream ends before exhausting the expected input buffer (size of interleaved blocks), it will minimize the block size to a smaller value so as to not bloat the output with lots of padded bytes. Generally unrecommended, as it decreases the maximal burst corruption size that the file can take before being unrecoverable.
+.TP
 \fB\-p\fR, \fB\-\-prefix\fR
 Sets the header options to defined presets each suited to a particular use case. This argument, due to getopt, is position dependent such that if you specify it before other argument, you can modify the header options contrary to the preset. This could be useful if you want to modify a portion of the preset, but not specify the whole thing. This does not replace the defaults, those still get applied if you set any option to 0 or omit it.
 .IP

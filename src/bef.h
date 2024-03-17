@@ -36,6 +36,12 @@ static const char *bef_magic = "BEFBABE";
 /* Verbosity Flag */
 extern uint8_t bef_vflag;
 
+/* Raw Flag */
+extern uint8_t bef_rflag;
+
+/* Minimize Flag */
+extern uint8_t bef_mflag;
+
 /* Our error codes
  * In general, all error codes are negative, and all positive returns are errors
  * being propagated back from underlying libraries if available. When an error
@@ -64,14 +70,6 @@ extern uint8_t bef_vflag;
  * parities.
  */
 #define BEF_BSIZE 65536
-
-/* Default scan size in bytes
- * This is the number of bytes that will be scanned for a valid fragment header
- * both backwards and forwards. Currently set to 2048 bytes (half a default
- * fragment), so it'll scan at max 4096 times before giving up. May decrease at
- * a future time after some more tests
- */
-#define BEF_SBYTE_DEFAULT 2048
 
 /* Default data and parity fragment ratios, just out of personal preference, I'd
  * like to lose at least 5% of the file on average before I give up and call it
@@ -233,7 +231,7 @@ void bef_decode_free(char *output);
  * error codes not yet defined, but will return 0 when successful
  */
 int bef_construct(int input, int output, uint64_t bsize,
-		  struct bef_real_header header, uint8_t raw_f);
+		  struct bef_real_header header);
 
 /* Main function that does the inverse of the above. Takes in a given input and
  * output, as well as a header struct and the raw flag. If the raw flag is not
@@ -241,7 +239,7 @@ int bef_construct(int input, int output, uint64_t bsize,
  * them and read the header from the input.
  */
 int bef_deconstruct(int input, int output, struct bef_real_header header,
-		    uint8_t raw_f, size_t sbyte);
+		    size_t sbyte);
 
 /* Memory-related boilerplate functions, crashes when out of memory */
 void *bef_malloc(size_t sz);

@@ -683,21 +683,25 @@ static int bef_decode_libfec(char **frags, uint16_t k, size_t frag_b,
 	for(uint16_t i = 0; i < k; i++) {
 		memcpy(&header, *(frags + i), sizeof(header));
 
-		/* Do our evil pointer arithmetic hackery again */
-		*(frags + i) += sizeof(header);
-
-		if(header.block_num != i + counter) {
-			out_arr[found++] = bef_malloc(size);
-			stack[counter] = i + counter;
-			counter++;
-		}
-
-		if(header.block_num >= k) {
-			recon_arr[stack[--counter]] = *(frags + i);
-			block_nums[stack[counter]] = header.block_num;
+		if(header.block_num != i + found && i + found < k) {
+			out_arr[counter] = bef_malloc(size);
+			stack[counter++] = i + found;
+			found++;
+			i--; //Keep going until we get to the correct index
 		} else {
-			recon_arr[header.block_num] = *(frags + i);
-			block_nums[header.block_num] = header.block_num;
+			/* Do our evil pointer arithmetic hackery again */
+			*(frags + i) += sizeof(header);
+
+			if(header.block_num >= k && counter > 0) {
+				recon_arr[stack[--counter]] = *(frags + i);
+				block_nums[stack[counter]] = header.block_num;
+			} else {
+				recon_arr[header.block_num] = *(frags + i);
+				block_nums[header.block_num] = header.block_num;
+			}
+
+			/* Undo our evil pointer arithmetic hackery */
+			*(frags + i) -= sizeof(header);
 		}
 	}
 
@@ -718,10 +722,6 @@ static int bef_decode_libfec(char **frags, uint16_t k, size_t frag_b,
 
 		memcpy(*output + i * size, tmp, size);
 	}
-
-	/* Undo our pointer hackery */
-	for(uint16_t i = 0; i < k; i++)
-		*(frags + i) -= sizeof(header);
 
 	for(uint8_t i = 0; i < found; i++)
 		free(out_arr[i]);

@@ -56,7 +56,7 @@ Enables the minimize flag, which modifies the behavior of the constructor such t
 \fB\-p\fR, \fB\-\-prefix\fR
 Sets the header options to defined presets each suited to a particular use case. This argument, due to getopt, is position dependent such that if you specify it before other argument, you can modify the header options contrary to the preset. This could be useful if you want to modify a portion of the preset, but not specify the whole thing. This does not replace the defaults, those still get applied if you set any option to 0 or omit it.
 .IP
-standard: A preset that mimics the Reed Solomon codes on a Compact Disc. Compact Discs use two interleaved codes, a inner (32, 28) code (k=28, m=4 in our language), and a outer (28, 24) (k=24, m=4). This mimics by choosing the more secure outer code as our parity settings and interleaves it twice (rather than the default 3).
+standard: A preset that mimics the Reed Solomon codes on a Compact Disc. Compact Discs use two interleaved codes, a inner (32, 28) code (k=28, m=4 in our language), and a outer (28, 24) (k=24, m=4). The sum of this is that the rate of data to total bytes is approximately (28*24)/(32*28) or 3/4 (1 parity byte for every 3 data bytes). So to mimic it, we shall have a setting of k=24, m=8 interleaved twice (rather than the default 5).
 .IP
 share: A preset made for sharing over the internet. Since there are so many checksums and HMACS in the case of HTTPS, SSL, or other popular encrypted communications, it is highly unlikely significant amounts of corruption will effect you. So the preset has a 1% redundancy rate at k=100, m=1.
 .IP

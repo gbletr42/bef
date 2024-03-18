@@ -85,7 +85,7 @@ int bef_set_preset(struct bef_real_header *header, uint64_t *bsize,
 	 */
 	case 0:
 		header->k = 24;
-		header->m = 4;
+		header->m = 8;
 		header->il_n = 2;
 		*bsize = 4 * 32 * 1024;
 		break;

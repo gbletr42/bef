@@ -87,7 +87,7 @@ int bef_set_preset(struct bef_real_header *header, uint64_t *bsize,
 		header->k = 24;
 		header->m = 8;
 		header->il_n = 2;
-		*bsize = 4 * 32 * 1024;
+		*bsize = 4 * 24 * 1024;
 		break;
 	/* share preset, very low redundancy at around 1% (it's going over the
 	 * internet with all those error corrections and likely HMACs ensuring
@@ -96,7 +96,7 @@ int bef_set_preset(struct bef_real_header *header, uint64_t *bsize,
 	case 1: //share preset, very low redundancy at around 1%
 		header->k = 100;
 		header->m = 1;
-		*bsize = 4 * 101 * 1024;
+		*bsize = 4 * 100 * 1024;
 		break;
 	/* archive preset, high redundancy at 50% and 10 blocks interleaved so
 	 * that worst case burst is ~90% of total parity.
@@ -105,7 +105,7 @@ int bef_set_preset(struct bef_real_header *header, uint64_t *bsize,
 		header->k = 16;
 		header->m = 8;
 		header->il_n = 10;
-		*bsize = 4 * 24 * 1024;
+		*bsize = 4 * 16 * 1024;
 		break;
 	/* paranoid preset, for those who are afraid that the sky'll fall down.
 	 * Very high redundancy at 100% and 20 blocks interleaved so that worst
@@ -115,7 +115,7 @@ int bef_set_preset(struct bef_real_header *header, uint64_t *bsize,
 		header->k = 16;
 		header->m = 16;
 		header->il_n = 20;
-		*bsize = 4 * 32 * 1024;
+		*bsize = 4 * 16 * 1024;
 		break;
 	default:
 		ret = -BEF_ERR_INVALINPUT;

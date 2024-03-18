@@ -1168,10 +1168,8 @@ static int bef_verify_fragment(char *frag, uint64_t nbyte, bef_hash_t hash_t,
 
 	/* Compare our two hashes */
 	if(memcmp(target_hash, hash, sizeof(hash)) != 0) {
-		/*
-		 *if(bef_vflag)
-		 *	fprintf(stderr, "ERROR: fragment corrupted!\n");
-		 */
+		if(bef_vflag > 2)
+			fprintf(stderr, "ERROR: fragment corrupted!\n");
 		return -BEF_ERR_INVALHASH;
 	} else
 		return 0;
@@ -1265,7 +1263,7 @@ static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
 		*offset += 1;
 	}
 
-	if(bef_vflag)
+	if(bef_vflag > 1)
 		fprintf(stderr,
 			"ERROR: fragment not found within scan distance\n");
 

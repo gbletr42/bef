@@ -26,6 +26,7 @@ AC_PROG_CC
 AC_PROG_INSTALL
 
 AC_LANG(C)
+AC_OPENMP
 
 dnl Due to it being default, I'll make XXHASH mandatory
 AC_CHECK_HEADER([xxhash.h], [], [AC_MSG_ERROR(xxHash is a required dependency of this software package)])

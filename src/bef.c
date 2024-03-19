@@ -46,6 +46,7 @@
 #include <sys/uio.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <omp.h>
 
 #define BEF_SAFE_READ	0
 #define BEF_SAFE_WRITE	1
@@ -950,9 +951,12 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 			     struct bef_real_header header)
 {
 	int ret;
+	int flag = 0;
+	uint8_t block_stat[header.il_n];
 	char ***blocks;
 	char **frags;
 	size_t frag_len = 0;
+	size_t tmp_len = 0;
 	uint64_t pbyte = bef_sky_padding(ibuf_s, header.il_n, header.k,
 					 bsize);
 	size_t fbyte = (ibuf_s + pbyte) / header.il_n;
@@ -961,32 +965,53 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 
 	bef_construct_buffers(&blocks, header.k + header.m, header.il_n);
 
+#ifdef _OPENMP
+#pragma omp parallel for private(ret, frags, tmp_len)
+#endif
 	for(uint16_t i = 0; i < header.il_n; i++) {
+		if(flag != 0)
+			continue; //Will just iterate until i is il_n
+
 		frags = *(blocks + i);
 
 		ret = bef_encode_ecc(ibuf + i * fbyte, fbyte, frags,
-				     frags + header.k, &frag_len, header.k,
+				     frags + header.k, &tmp_len, header.k,
 				     header.m, header.par_t);
 
-		/* Free our older arrays, if this isn't the first one */
-		if(ret != 0 && i > 0) {
-			for(uint16_t j = i; j > 0; j--)
-				bef_encode_free(*(blocks + j - 1),
-						*(blocks + j - 1) + header.k,
-						header.k, header.m);
+#ifdef _OPENMP
+#pragma omp critical
+{
+#endif
+		if(ret != 0) {
+			block_stat[i] = 0;
+			flag = ret;
+		} else {
+			block_stat[i] = 1;
 		}
 
-		if(ret != 0)
-			goto out;
+		if(frag_len != tmp_len)
+			frag_len = tmp_len;
+#ifdef _OPENMP
+}
+#endif
 	}
 
-	ret = bef_construct_blocks(obuf, blocks, frag_len, pbyte, il_count,
-				   header);
+	if(flag != 0) {
+		for(uint16_t i = 0; i < header.il_n; i++)
+			if(block_stat[i])
+				bef_encode_free(*(blocks + i),
+						*(blocks + i) + header.k,
+						header.k, header.m);
+		ret = flag;
+	} else {
+		ret = bef_construct_blocks(obuf, blocks, frag_len, pbyte,
+					   il_count, header);
 
-	for(uint16_t i = 0; i < header.il_n; i++)
-		bef_encode_free(*(blocks + i), *(blocks + i) + header.k,
-				header.k, header.m);
-out:
+		for(uint16_t i = 0; i < header.il_n; i++)
+			bef_encode_free(*(blocks + i), *(blocks + i) + header.k,
+					header.k, header.m);
+	}
+
 	bef_construct_free(blocks, header.il_n);
 	return ret;
 }
@@ -1346,6 +1371,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 				  struct bef_real_header header)
 {
 	int ret;
+	int flag = 0;
 	char *output;
 	size_t onbyte;
 	char ***buf_arr;
@@ -1359,23 +1385,39 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	if(ret != 0)
 		goto out;
 
+#ifdef _OPENMP
+#pragma omp parallel for private(output, onbyte, ret)
+#endif
 	for(uint16_t i = 0; i < header.il_n; i++) {
+		if(flag != 0)
+			continue; //Iterate until done
+
 		ret = bef_decode_ecc(*(buf_arr + i), header.k, frag_b, &output,
 				     &onbyte, header.k, header.m, header.par_t);
+#ifdef _OPENMP
+#pragma omp critical
+{
+#endif
 		if(ret != 0)
-			goto out;
+			flag = ret;
 
 		/* Allocate our output buffer, if not already allocated */
 		if(*obuf_s == 0) {
 			*obuf_s = header.il_n * onbyte;
 			*obuf = bef_malloc(*obuf_s);
 		}
+#ifdef _OPENMP
+}
+#endif
 
 		/* Copy over the results to real output buffer */
 		memcpy(*obuf + i * onbyte, output, onbyte);
 
 		bef_decode_free(output);
 	}
+
+	if(flag != 0)
+		ret = flag;
 out:
 	bef_deconstruct_free(buf_arr, header.k, header.il_n);
 	return ret;

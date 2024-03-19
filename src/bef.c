@@ -914,23 +914,30 @@ static int bef_construct_blocks(char *output, char ***blocks,
 				struct bef_real_header header)
 {
 	int ret;
+	int flag = 0;
 	size_t offset = 0;
 	uint64_t block_num = il_count * header.il_n;
 
+	omp_set_num_threads(MIN(omp_get_num_procs(), header.k + header.m));
+#pragma omp parallel for private(block_num, offset, ret)
 	for(uint16_t i = 0; i < header.k + header.m; i++) {
+		if(flag != 0)
+			continue; //Iterate until done
+
+		offset = header.nbyte * header.il_n * i;
+		block_num = il_count * header.il_n;
+
 		for(uint16_t j = 0; j < header.il_n; j++) {
 			ret = bef_construct_frag(output + offset, blocks[j][i],
 						 frag_len, header.hash_t,
 						 pbyte, block_num++);
 			if(ret != 0)
-				return ret;
+				flag = ret;
 			offset += (size_t) header.nbyte;
 		}
-
-		block_num = il_count * header.il_n;
 	}
 
-	return 0;
+	return flag;
 }
 
 static void bef_construct_buffers(char ****blocks, uint16_t km, uint16_t il_n)

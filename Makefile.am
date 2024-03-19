@@ -17,7 +17,7 @@
 
 AUTOMAKE_OPTIONS = subdir-objects
 
-CFLAGS += -Wall -Wextra -Wno-sign-compare
+CFLAGS += -Wall -Wextra -Wno-sign-compare $(OPENMP_CFLAGS)
 
 bin_PROGRAMS = bef
 bef_SOURCES = src/bef.c src/bef_cmd.c src/zfec.c

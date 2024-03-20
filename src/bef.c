@@ -46,8 +46,10 @@
 #include <sys/uio.h>
 #include <fcntl.h>
 #include <stdio.h>
-#include <omp.h>
 #include <sys/param.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 #define BEF_SAFE_READ	0
 #define BEF_SAFE_WRITE	1
@@ -58,8 +60,10 @@
 #define BEF_SCAN_FORWARDS	0
 #define BEF_SCAN_BACKWARDS	1
 
-#define BEF_FD_FILE	0
-#define BEF_FD_PIPE	1
+#define BEF_SPAR_ENCODE		0
+#define BEF_SPAR_DECODE		1
+#define BEF_SPAR_MAXFRA		2
+#define BEF_SPAR_MAXNUM		3
 
 /* Struct for libfec header */
 struct bef_fec_header {
@@ -67,7 +71,9 @@ struct bef_fec_header {
 	uint32_t padding;
 };
 
+#ifdef BEF_LIBERASURECODE
 static int bef_desc = -1;
+#endif
 static fec_t *bef_context = NULL;
 
 void *bef_malloc(size_t sz)
@@ -98,34 +104,6 @@ void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz)
 	ptr = reallocarray(ptr, nmemb, sz);
 	assert(ptr != NULL);
 	return ptr;
-}
-
-uint16_t bef_max_frag(bef_par_t par_t)
-{
-	uint16_t ret;
-
-	switch(par_t) {
-#ifdef BEF_LIBERASURECODE
-	case BEF_PAR_J_V_RS:
-	case BEF_PAR_LE_V_RS:
-	case BEF_PAR_I_V_RS:
-	case BEF_PAR_I_C_RS:
-		ret = 32;
-		break;
-	case BEF_PAR_J_C_RS:
-		ret = 16;
-		break;
-#endif
-	case 0:
-	case BEF_PAR_F_V_RS:
-		ret = 256;
-		break;
-	default:
-		ret = 0;
-		break;
-	}
-
-	return ret;
 }
 
 #ifdef BEF_LIBERASURECODE
@@ -588,52 +566,10 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 	return 0;
 }
 
-int bef_encode_ecc(const char *input, size_t inbyte, char **data,
-		   char **parity,  size_t *frag_len, int k, int m,
-		   bef_par_t par_t)
-{
-	int ret = 0;
-
-	if(bef_vflag > 1)
-		fprintf(stderr,
-			"Encoding %zu bytes, k %d, m %d, parity type %u\n",
-			inbyte, k, m, par_t);
-
-	switch(par_t) {
-#ifdef BEF_LIBERASURECODE
-	case BEF_PAR_J_V_RS:
-	case BEF_PAR_J_C_RS:
-	case BEF_PAR_LE_V_RS:
-	case BEF_PAR_I_V_RS:
-	case BEF_PAR_I_C_RS:
-		ret = bef_encode_liberasurecode(input, inbyte, data, parity,
-						frag_len, k, m);
-		break;
-#endif
-	case BEF_PAR_F_V_RS:
-		ret = bef_encode_libfec(input, inbyte, data, parity, frag_len,
-					k, m);
-		break;
-	default:
-		ret = -BEF_ERR_INVALINPUT;
-		break;
-	}
-
-	return ret;
-}
-
-void bef_encode_free(char **data, char **parity, int k, int m)
-{
-	for(int i = 0; i < k; i++)
-		free(*(data + i));
-	for(int i = 0; i < m; i++)
-		free(*(parity + i));
-}
-
 #ifdef BEF_LIBERASURECODE
 static int bef_decode_liberasurecode(char **frags, uint16_t frag_len,
-				     size_t frag_b, char **output,
-				     size_t *onbyte)
+				     uint16_t dummy, size_t frag_b,
+				     char **output, size_t *onbyte)
 {
 	int ret;
 	char *tmp_output;
@@ -667,8 +603,8 @@ static int bef_decode_liberasurecode(char **frags, uint16_t frag_len,
  * we need to reconstruct it in order of block number, replacing missing block
  * numbers with parities.
  */
-static int bef_decode_libfec(char **frags, uint16_t k, size_t frag_b,
-			     char **output, size_t *onbyte, int m)
+static int bef_decode_libfec(char **frags, uint16_t k, uint16_t m,
+			     size_t frag_b, char **output, size_t *onbyte)
 {
 	char *out_arr[m]; //At most m outputs
 	char *recon_arr[k]; //At most k outputs
@@ -730,10 +666,96 @@ static int bef_decode_libfec(char **frags, uint16_t k, size_t frag_b,
 	return 0;
 }
 
+static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
+{
+	int ret = 0;
+	void **pp = (void **) p;
+	uint16_t *max = (uint16_t *) p;
+
+	if(flag >= BEF_SPAR_MAXNUM)
+		return -BEF_ERR_INVALINPUT;
+
+	switch(par_t) {
+#ifdef BEF_LIBERASURECODE
+	case BEF_PAR_J_V_RS:
+	case BEF_PAR_J_C_RS:
+	case BEF_PAR_LE_V_RS:
+	case BEF_PAR_I_V_RS:
+	case BEF_PAR_I_C_RS:
+		if(flag == BEF_SPAR_ENCODE) {
+			*pp = &bef_encode_liberasurecode;
+		} else if(flag == BEF_SPAR_DECODE) {
+			*pp = &bef_decode_liberasurecode;
+		} else if(flag == BEF_SPAR_MAXFRA) {
+			if(par_t == BEF_PAR_J_C_RS)
+				*max = 16;
+			else
+				*max = 32;
+		}
+		break;
+#endif
+	case 0:
+	case BEF_PAR_F_V_RS:
+		if(flag == BEF_SPAR_ENCODE)
+			*pp = &bef_encode_libfec;
+		else if(flag == BEF_SPAR_DECODE)
+			*pp = &bef_decode_libfec;
+		else if(flag == BEF_SPAR_MAXFRA)
+			*max = 256;
+		break;
+	default:
+		ret = -BEF_ERR_INVALINPUT;
+		break;
+	}
+
+	return ret;
+}
+
+uint16_t bef_max_frag(bef_par_t par_t)
+{
+	uint16_t ret = 0;
+
+	bef_sky_par(par_t, &ret, BEF_SPAR_MAXFRA);
+
+	return ret;
+}
+
+int bef_encode_ecc(const char *input, size_t inbyte, char **data,
+		   char **parity,  size_t *frag_len, int k, int m,
+		   bef_par_t par_t)
+{
+	int ret = 0;
+	int (*f)(const char *, size_t, char **, char **,
+		 size_t *, int, int) = NULL;
+
+	if(bef_vflag > 1)
+		fprintf(stderr,
+			"Encoding %zu bytes, k %d, m %d, parity type %u\n",
+			inbyte, k, m, par_t);
+
+	ret = bef_sky_par(par_t, &f, BEF_SPAR_ENCODE);
+	if(ret != 0)
+		return ret;
+
+	ret = (*f)(input, inbyte, data, parity, frag_len, k, m);
+
+	return ret;
+}
+
+void bef_encode_free(char **data, char **parity, int k, int m)
+{
+	for(int i = 0; i < k; i++)
+		free(*(data + i));
+	for(int i = 0; i < m; i++)
+		free(*(parity + i));
+}
+
 int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
 		   char **output, size_t *onbyte, int k, int m, bef_par_t par_t)
 {
 	int ret = 0;
+	int (*f)(char **, uint16_t, uint16_t,
+		 size_t, char **, size_t *) = NULL;
 
 	/* Not enough fragments */
 	if(frag_len < k)
@@ -750,24 +772,11 @@ int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
 			"Decoding %zu bytes, k %d, m %d, parity type %u\n",
 			frag_b * frag_len, k, m, par_t);
 
-	switch(par_t) {
-#ifdef BEF_LIBERASURECODE
-	case BEF_PAR_J_V_RS:
-	case BEF_PAR_J_C_RS:
-	case BEF_PAR_LE_V_RS:
-	case BEF_PAR_I_V_RS:
-	case BEF_PAR_I_C_RS:
-		ret = bef_decode_liberasurecode(frags, frag_len, frag_b, output,
-						onbyte);
-		break;
-#endif
-	case BEF_PAR_F_V_RS:
-		ret = bef_decode_libfec(frags, k, frag_b, output, onbyte, m);
-		break;
-	default:
-		ret = -BEF_ERR_INVALINPUT;
-		break;
-	}
+	ret = bef_sky_par(par_t, &f, BEF_SPAR_DECODE);
+	if(ret != 0)
+		return ret;
+
+	ret = (*f)(frags, frag_len, m, frag_b, output, onbyte);
 
 	return ret;
 }

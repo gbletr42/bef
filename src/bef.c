@@ -1087,7 +1087,10 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 	bef_construct_buffers(&blocks, header.k + header.m, header.il_n);
 
 #ifdef _OPENMP
-	omp_set_num_threads(MIN(omp_get_num_procs(), header.il_n));
+	if(bef_numT == 0)
+		omp_set_num_threads(MIN(omp_get_num_procs(), header.il_n));
+	else
+		omp_set_num_threads(bef_numT);
 #pragma omp parallel for private(ret, frags, tmp_len)
 #endif
 	for(uint16_t i = 0; i < header.il_n; i++) {
@@ -1508,7 +1511,10 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 		goto out;
 
 #ifdef _OPENMP
-	omp_set_num_threads(MIN(omp_get_num_procs(), header.il_n));
+	if(bef_numT == 0)
+		omp_set_num_threads(MIN(omp_get_num_procs(), header.il_n));
+	else
+		omp_set_num_threads(bef_numT);
 #pragma omp parallel for private(output, onbyte, ret)
 #endif
 	for(uint16_t i = 0; i < header.il_n; i++) {

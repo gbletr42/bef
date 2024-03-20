@@ -1572,7 +1572,7 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 		/* Get our header and verify its sanity */
 		ret = bef_deconstruct_header(input, &header);
 		if(ret != 0)
-			goto out;
+			return -BEF_ERR_INVALINPUT;
 
 		if(header.k == 0) {
 			if(bef_vflag)

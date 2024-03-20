@@ -34,5 +34,11 @@ endif
 if LIBERASURECODE
 bef_LDADD += -lerasurecode
 endif
+if CM256CC
+noinst_LIBRARIES = libcm256.a
+libcm256_a_CXXFLAGS = $(CXXFLAGS) -DUSE_SSSE3 #won't build on Arch otherwise...
+libcm256_a_SOURCES = src/cm256.cc
+bef_LDADD += libcm256.a -lcm256cc -lstdc++
+endif
 
 man_MANS = doc/bef.1

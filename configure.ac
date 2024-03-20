@@ -23,7 +23,9 @@ AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign])
 
 AC_PROG_CC
+AC_PROG_CXX
 AC_PROG_INSTALL
+AC_PROG_RANLIB
 
 AC_LANG(C)
 AC_OPENMP
@@ -36,6 +38,7 @@ AC_ARG_WITH([blake3], [AS_HELP_STRING([--with-blake3], [enable BLAKE3 support])]
 AC_ARG_WITH([zlib], [AS_HELP_STRING([--with-zlib], [enable zlib support])], [AC_DEFINE([BEF_ZLIB], 1, [enables zlib support]) AC_CHECK_HEADERS([zlib.h]) zlib=yes], [])
 AC_ARG_WITH([openssl], [AS_HELP_STRING([--with-openssl], [enable OpenSSL support])], [AC_DEFINE([BEF_OPENSSL], 1, [enables OpenSSL support]) AC_CHECK_HEADERS([openssl/evp.h]) openssl=yes], [])
 AC_ARG_WITH([liberasurecode], [AS_HELP_STRING([--with-liberasurecode], [enable liberasurecode support])], [AC_DEFINE([BEF_LIBERASURECODE], 1, [enables liberasurecode support]) AC_CHECK_HEADERS([erasurecode.h]) erasurecode=yes], [])
+AC_ARG_WITH([cm256cc], [AS_HELP_STRING([--with-cm256cc], [enable cm256cc support])], [AC_DEFINE([BEF_CM256CC], 1, [enables cm256cc support]) cm256cc=yes], [])
 AC_CHECK_HEADERS([jerasure.h] [isa-l.h])
 
 dnl Check some specific structs and such
@@ -47,6 +50,7 @@ AM_CONDITIONAL([BLAKE3], [test "$blake3" == "yes"])
 AM_CONDITIONAL([ZLIB], [test "$zlib" == "yes"])
 AM_CONDITIONAL([OPENSSL], [test "$openssl" == "yes"])
 AM_CONDITIONAL([LIBERASURECODE], [test "$erasurecode" == "yes"])
+AM_CONDITIONAL([CM256CC], [test "$cm256cc" == "yes"])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

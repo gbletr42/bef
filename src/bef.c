@@ -16,11 +16,12 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-//TODO: Add real error handling!
-
 #include "bef.h"
 #include "zfec.h"
 
+#ifdef BEF_CM256CC
+#include "cm256.h"
+#endif
 #ifdef BEF_OPENSSL
 #include <openssl/evp.h>
 #endif
@@ -63,7 +64,9 @@
 #define BEF_SPAR_ENCODE		0
 #define BEF_SPAR_DECODE		1
 #define BEF_SPAR_MAXFRA		2
-#define BEF_SPAR_MAXNUM		3
+#define BEF_SPAR_INIT		4
+#define BEF_SPAR_DESTRO		5
+#define BEF_SPAR_MAXNUM		6
 
 /* Struct for libfec header */
 struct bef_fec_header {
@@ -168,33 +171,6 @@ static void bef_fec_init(uint16_t k, uint16_t m)
 	bef_context = fec_new(k, k+m);
 }
 
-/* Function to initialize reusable global variables */
-static int bef_init(struct bef_real_header header)
-{
-	int ret;
-
-	switch(header.par_t) {
-#ifdef BEF_LIBERASURECODE
-	case BEF_PAR_J_V_RS:
-	case BEF_PAR_J_C_RS:
-	case BEF_PAR_LE_V_RS:
-	case BEF_PAR_I_V_RS:
-	case BEF_PAR_I_C_RS:
-		ret = bef_liberasurecode_init(header.par_t, header.k, header.m);
-		break;
-#endif
-	case BEF_PAR_F_V_RS:
-		ret = 0;
-		bef_fec_init(header.k, header.m);
-		break;
-	default:
-		ret = -BEF_ERR_INVALINPUT;
-		break;
-	}
-
-	return ret;
-}
-
 #ifdef BEF_LIBERASURECODE
 static int bef_liberasurecode_destroy(void)
 {
@@ -211,33 +187,6 @@ static int bef_liberasurecode_destroy(void)
 static void bef_fec_destroy(void)
 {
 	fec_free(bef_context);
-}
-
-/* Function to clean up global reusable variables */
-static int bef_destroy(struct bef_real_header header)
-{
-	int ret;
-
-	switch(header.par_t) {
-#ifdef BEF_LIBERASURECODE
-	case BEF_PAR_J_V_RS:
-	case BEF_PAR_J_C_RS:
-	case BEF_PAR_LE_V_RS:
-	case BEF_PAR_I_V_RS:
-	case BEF_PAR_I_C_RS:
-		ret = bef_liberasurecode_destroy();
-		break;
-#endif
-	case BEF_PAR_F_V_RS:
-		ret = 0;
-		bef_fec_destroy();
-		break;
-	default:
-		ret = -BEF_ERR_INVALINPUT;
-		break;
-	}
-
-	return ret;
 }
 
 /* Our great padding function from the sky. Gives the amount of padded bytes
@@ -488,7 +437,7 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 #ifdef BEF_LIBERASURECODE
 static int bef_encode_liberasurecode(const char *input, size_t inbyte,
 				     char **data, char **parity,
-				     size_t *frag_len, int k, int m)
+				     size_t *frag_len, uint16_t k, uint16_t m)
 {
 	int ret;
 	char **tmp_data;
@@ -526,7 +475,8 @@ static int bef_encode_liberasurecode(const char *input, size_t inbyte,
  * it's a primary or secondary block.
  */
 static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
-			     char **parity, size_t *frag_len, int k, int m)
+			     char **parity, size_t *frag_len, uint16_t k,
+			     uint16_t m)
 {
 	struct bef_fec_header header = {0};
 	size_t size = inbyte / k; //Size of each data fragment, prepadded
@@ -564,6 +514,102 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 		*(parity + i) -= sizeof(header);
 
 	return 0;
+}
+
+#ifdef BEF_CM256CC
+/* We need header information regarding the block number (Index in this case).
+ * The API struct is sadly not padded and thus is undefined in many cases.
+ * However, I still desire to keep compatibility with the actual API interface,
+ * so we'll use our trusty bef_fec_header struct for this essential metadata.
+ */
+static int bef_encode_cm256(const char *input, size_t inbyte, char **data,
+			    char **parity, size_t *frag_len, uint16_t k,
+			    uint16_t m)
+{
+	int ret;
+	bef_cm256_encoder_params params = {k, m, inbyte / k};
+	bef_cm256_block iblock[k];
+	char *block_buf = bef_malloc(m * params.BlockBytes);
+	struct bef_fec_header header = {0};
+	*frag_len = params.BlockBytes + sizeof(header);
+
+	/* Allocate our arrays */
+	for(uint16_t i = 0; i < k; i++) {
+		header.block_num = i;
+		*(data + i) = bef_malloc(params.BlockBytes + sizeof(header));
+
+		memcpy(*(data + i), &header, sizeof(header));
+		memcpy(*(data + i) + sizeof(header),
+		       input + i * params.BlockBytes, params.BlockBytes);
+	}
+	for(uint16_t i = 0; i < m; i++) {
+		header.block_num = k + i;
+		*(parity + i) = bef_malloc(params.BlockBytes + sizeof(header));
+
+		memcpy(*(parity + i), &header, sizeof(header));
+	}
+
+	/* Set our original blocks */
+	for(uint16_t i = 0; i < k; i++) {
+		iblock[i].Block = *(data + i) + sizeof(header);
+		iblock[i].Index = i;
+	}
+
+	ret = bef_cm256_encode(params, iblock, block_buf);
+	if(ret != 0) {
+		bef_encode_free(data, parity, k, m);
+		ret = -BEF_ERR_CM256;
+		goto out;
+	}
+
+	/* Copy over the parities */
+	for(uint16_t i = 0; i < m; i++)
+		memcpy(*(parity + i) + sizeof(header),
+		       block_buf + i * params.BlockBytes, params.BlockBytes);
+
+out:
+	free(block_buf);
+	return ret;
+}
+#endif
+
+/* Reconstructs a given array of fragments with a bef_fec_header
+ * Returns the number of fragments not found (and replaced with recoveries)
+ */
+static uint16_t bef_decode_reconstruct(char **frags, char **recon_arr,
+				       uint32_t *block_nums,
+				       uint16_t k, uint16_t m)
+{
+	uint16_t found = 0;
+	uint16_t counter = 0;
+	uint16_t stack[m];
+	struct bef_fec_header header;
+
+	for(uint16_t i = 0; i < k; i++) {
+		memcpy(&header, *(frags + i), sizeof(header));
+
+		if(header.block_num != i + found && i + found < k) {
+			stack[counter++] = i + found;
+			found++;
+			i--; //Keep going until we get to the correct index
+		} else {
+			/* Do our evil pointer arithmetic hackery again */
+			*(frags + i) += sizeof(header);
+
+			if(header.block_num >= k && counter > 0) {
+				recon_arr[stack[--counter]] = *(frags + i);
+				block_nums[stack[counter]] = header.block_num;
+			} else {
+				recon_arr[header.block_num] = *(frags + i);
+				block_nums[header.block_num] = header.block_num;
+			}
+
+			/* Undo our evil pointer arithmetic hackery */
+			*(frags + i) -= sizeof(header);
+		}
+	}
+
+	return found;
 }
 
 #ifdef BEF_LIBERASURECODE
@@ -608,47 +654,24 @@ static int bef_decode_libfec(char **frags, uint16_t k, uint16_t m,
 {
 	char *out_arr[m]; //At most m outputs
 	char *recon_arr[k]; //At most k outputs
-	uint16_t stack[m];
-	unsigned int block_nums[k];
-	uint16_t found = 0;
-	uint16_t counter = 0;
+	uint32_t block_nums[k];
+	uint16_t found;
 	char *tmp; //To avoid duplicate paths later
 	struct bef_fec_header header;
 	size_t size = frag_b - sizeof(header);
 	*onbyte = size * k;
 
-	/* See the odd one out and allocate an output */
-	for(uint16_t i = 0; i < k; i++) {
-		memcpy(&header, *(frags + i), sizeof(header));
-
-		if(header.block_num != i + found && i + found < k) {
-			out_arr[counter] = bef_malloc(size);
-			stack[counter++] = i + found;
-			found++;
-			i--; //Keep going until we get to the correct index
-		} else {
-			/* Do our evil pointer arithmetic hackery again */
-			*(frags + i) += sizeof(header);
-
-			if(header.block_num >= k && counter > 0) {
-				recon_arr[stack[--counter]] = *(frags + i);
-				block_nums[stack[counter]] = header.block_num;
-			} else {
-				recon_arr[header.block_num] = *(frags + i);
-				block_nums[header.block_num] = header.block_num;
-			}
-
-			/* Undo our evil pointer arithmetic hackery */
-			*(frags + i) -= sizeof(header);
-		}
-	}
+	found = bef_decode_reconstruct(frags, recon_arr, block_nums, k, m);
+	for(uint16_t i = 0; i < found; i++)
+		out_arr[i] = bef_malloc(size);
 
 	/* Allocate our output buffer */
 	*output = bef_malloc(*onbyte);
 
 	if(found > 0) //We can just read directly if they're all good
 		fec_decode(bef_context, (unsigned char **) recon_arr,
-			   (unsigned char **) out_arr, block_nums, size);
+			   (unsigned char **) out_arr,
+			   (unsigned int *) block_nums, size);
 
 	/* Write to output buffer */
 	found = 0;
@@ -666,11 +689,50 @@ static int bef_decode_libfec(char **frags, uint16_t k, uint16_t m,
 	return 0;
 }
 
+#ifdef BEF_CM256CC
+/* Similar to the libfec interface in that we need to reconstruct the array to
+ * its proper state. I should probably make a dedicated function to
+ * reconstruction since it seems to pop up frequently...
+ */
+static int bef_decode_cm256(char **frags, uint16_t k, uint16_t m,
+			    size_t frag_b, char **output, size_t *onbyte)
+{
+	int ret;
+	struct bef_fec_header header;
+	uint32_t block_nums[k];
+	char **recon_arr[k];
+	bef_cm256_encoder_params params = {k, m, frag_b - sizeof(header)};
+	bef_cm256_block blocks[k];
+	*onbyte = params.BlockBytes * k;
+	*output = bef_malloc(*onbyte);
+
+	bef_decode_reconstruct(frags, recon_arr, block_nums, k, m);
+
+	for(uint16_t i = 0; i < k; i++) {
+		blocks[i].Block = recon_arr[i];
+		blocks[i].Index = (unsigned char) block_nums[i];
+	}
+
+	ret = bef_cm256_decode(params, blocks);
+	if(ret != 0) {
+		bef_decode_free(*output);
+		return -BEF_ERR_CM256;
+	}
+
+	/* Copy over our results */
+	for(uint16_t i = 0; i < k; i++)
+		memcpy(*output + i * params.BlockBytes, blocks[i].Block,
+		       params.BlockBytes);
+	return ret;
+}
+#endif
+
 static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 {
 	int ret = 0;
 	void **pp = (void **) p;
 	uint16_t *max = (uint16_t *) p;
+	struct bef_real_header *header = (struct bef_real_header *) p;
 
 	if(flag >= BEF_SPAR_MAXNUM)
 		return -BEF_ERR_INVALINPUT;
@@ -691,6 +753,12 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 				*max = 16;
 			else
 				*max = 32;
+		} else if(flag == BEF_SPAR_INIT) {
+			ret = bef_liberasurecode_init(header->par_t,
+						      header->k,
+						      header->m);
+		} else if(flag == BEF_SPAR_DESTRO) {
+			ret = bef_liberasurecode_destroy();
 		}
 		break;
 #endif
@@ -702,11 +770,45 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 			*pp = &bef_decode_libfec;
 		else if(flag == BEF_SPAR_MAXFRA)
 			*max = 256;
+		else if(flag == BEF_SPAR_INIT)
+			bef_fec_init(header->k, header->m);
+		else if(flag == BEF_SPAR_DESTRO)
+			bef_fec_destroy();
 		break;
+#ifdef BEF_CM256CC
+	case BEF_PAR_CM_C_RS:
+		if(flag == BEF_SPAR_ENCODE)
+			*pp = &bef_encode_cm256;
+		else if(flag == BEF_SPAR_DECODE)
+			*pp = &bef_decode_cm256;
+		else if(flag == BEF_SPAR_MAXFRA)
+			*max = 256;
+		break;
+#endif
 	default:
 		ret = -BEF_ERR_INVALINPUT;
 		break;
 	}
+
+	return ret;
+}
+
+/* Function to initialize reusable global variables */
+static int bef_init(struct bef_real_header header)
+{
+	int ret;
+
+	ret = bef_sky_par(header.par_t, &header, BEF_SPAR_INIT);
+
+	return ret;
+}
+
+/* Function to clean up global reusable variables */
+static int bef_destroy(struct bef_real_header header)
+{
+	int ret;
+
+	ret = bef_sky_par(header.par_t, &header, BEF_SPAR_DESTRO);
 
 	return ret;
 }
@@ -721,12 +823,12 @@ uint16_t bef_max_frag(bef_par_t par_t)
 }
 
 int bef_encode_ecc(const char *input, size_t inbyte, char **data,
-		   char **parity,  size_t *frag_len, int k, int m,
+		   char **parity,  size_t *frag_len, uint16_t k, uint16_t m,
 		   bef_par_t par_t)
 {
 	int ret = 0;
 	int (*f)(const char *, size_t, char **, char **,
-		 size_t *, int, int) = NULL;
+		 size_t *, uint16_t, uint16_t) = NULL;
 
 	if(bef_vflag > 1)
 		fprintf(stderr,
@@ -742,16 +844,17 @@ int bef_encode_ecc(const char *input, size_t inbyte, char **data,
 	return ret;
 }
 
-void bef_encode_free(char **data, char **parity, int k, int m)
+void bef_encode_free(char **data, char **parity, uint16_t k, uint16_t m)
 {
-	for(int i = 0; i < k; i++)
+	for(uint16_t i = 0; i < k; i++)
 		free(*(data + i));
-	for(int i = 0; i < m; i++)
+	for(uint16_t i = 0; i < m; i++)
 		free(*(parity + i));
 }
 
 int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
-		   char **output, size_t *onbyte, int k, int m, bef_par_t par_t)
+		   char **output, size_t *onbyte, uint16_t k, uint16_t m,
+		   bef_par_t par_t)
 {
 	int ret = 0;
 	int (*f)(char **, uint16_t, uint16_t,

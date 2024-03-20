@@ -21,9 +21,6 @@
 
 /* Our third party libraries */
 #define _FILE_OFFSET_BITS 64 //Make off_t 64 bits
-#ifdef linux
-#define _GNU_SOURCE
-#endif
 #include "../config.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -60,6 +57,7 @@ extern uint8_t bef_mflag;
 
 /* Placeholder error values, to be replaced with more descriptive errors */
 #define BEF_ERR_OPENSSL		1453 //Error in OpenSSL library
+#define BEF_ERR_CM256		1454 //Error in CM256CC library
 
 
 /* Default block size in bytes
@@ -117,6 +115,7 @@ extern uint8_t bef_mflag;
 //#define BEF_PAR_SHSS	8 //NTT's SHSS erasure coding algorithm
 //#define BEF_PAR_PHAZR	9 //Phazr.IO's erasure coding algorithm
 #define BEF_PAR_F_V_RS	10 //zfec's libfec Software Vandermonde Reed Solomon
+#define BEF_PAR_CM_C_RS	11 //cm256cc's Cauchy Reed Solomon
 
 /* I find that, unless it's exceptionally large number of fragments, zfec's
  * modified libfec seems to be by far the fastest
@@ -187,11 +186,11 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
  * error codes not yet defined, but will return 0 when successful
  */
 int bef_encode_ecc(const char *input, size_t inbyte, char **data,
-		   char **parity, size_t *frag_len, int k, int m,
+		   char **parity, size_t *frag_len, uint16_t k, uint16_t m,
 		   bef_par_t par_t);
 
 /* Frees the data structures allocated by bef_encode_ecc */
-void bef_encode_free(char **data, char **parity, int k, int m);
+void bef_encode_free(char **data, char **parity, uint16_t k, uint16_t m);
 
 /* Generalized erasure code decoding function. It takes in an array of
  * fragments, each fragment's size in byte, and outputs the decoded result to
@@ -202,7 +201,7 @@ void bef_encode_free(char **data, char **parity, int k, int m);
  * error codes not yet defined, but will return 0 when successful
  */
 int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
-		   char **output, size_t *onbyte, int k, int m,
+		   char **output, size_t *onbyte, uint16_t k, uint16_t m,
 		   bef_par_t par_t);
 
 /* Frees the output buffer from bef_decode_ecc(). Of course you could also just

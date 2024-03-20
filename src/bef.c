@@ -918,8 +918,9 @@ static int bef_construct_blocks(char *output, char ***blocks,
 	size_t offset = 0;
 	uint64_t block_num = il_count * header.il_n;
 
-	omp_set_num_threads(MIN(omp_get_num_procs(), header.k + header.m));
+#ifdef _OPENMP
 #pragma omp parallel for private(block_num, offset, ret)
+#endif
 	for(uint16_t i = 0; i < header.k + header.m; i++) {
 		if(flag != 0)
 			continue; //Iterate until done

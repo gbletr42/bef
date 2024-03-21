@@ -36,7 +36,6 @@
 #endif
 #ifdef BEF_OPENFEC
 #include <openfec/lib_common/of_openfec_api.h>
-#include <openfec/lib_stable/ldpc_staircase/of_ldpc_staircase_api.h>
 #endif
 
 #include <string.h>

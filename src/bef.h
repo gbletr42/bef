@@ -121,7 +121,6 @@ extern uint16_t bef_numT;
 #define BEF_PAR_F_V_RS	10 //zfec's libfec Software Vandermonde Reed Solomon
 #define BEF_PAR_CM_C_RS	11 //cm256cc's Cauchy Reed Solomon
 #define BEF_PAR_OF_V_RS	12 //OpenFEC's Vandermonde Reed Solomon
-#define BEF_PAR_OF_LDPC	13 //OpenFEC's Staircase LDPC
 
 /* I find that, unless it's exceptionally large number of fragments, zfec's
  * modified libfec seems to be by far the fastest

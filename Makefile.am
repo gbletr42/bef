@@ -17,7 +17,8 @@
 
 AUTOMAKE_OPTIONS = subdir-objects
 
-CFLAGS += -Wall -Wextra -Wno-sign-compare $(OPENMP_CFLAGS)
+CFLAGS += -Wall -Wextra -Wno-sign-compare -Wpadded $(OPENMP_CFLAGS)
+CXXFLAGS += $(CFLAGS)
 
 bin_PROGRAMS = bef
 bef_SOURCES = src/bef.c src/bef_cmd.c src/zfec.c
@@ -35,7 +36,7 @@ if LIBERASURECODE
 bef_LDADD += -lerasurecode
 endif
 if CM256CC
-bef_CXXFLAGS = ${CFLAGS} $(CXXFLAGS) -DUSE_SSSE3 #won't build on Arch otherwise...
+bef_CXXFLAGS = $(CXXFLAGS) -DUSE_SSSE3 #won't build on Arch otherwise...
 bef_SOURCES += src/cm256.cc
 bef_LDADD += -lcm256cc -lstdc++
 endif

@@ -1137,7 +1137,7 @@ static int bef_destroy(struct bef_real_header header)
 	return ret;
 }
 
-uint16_t bef_max_frag(bef_par_t par_t)
+uint32_t bef_max_frag(bef_par_t par_t)
 {
 	uint32_t ret = 0;
 
@@ -1256,13 +1256,6 @@ static int bef_construct_header(int input, char **ibuf, size_t *ibuf_s,
 			fprintf(stderr, "Minimizing block size to %lu\n",
 				*bsize);
 	}
-
-	/* Set preliminary nbyte for certain backends that require it */
-	header->header.nbyte = (*ibuf_s / header->header.il_n) / k;
-
-	ret = bef_init(header->header);
-	if(ret != 0)
-		return ret;
 
 	/* Pad out if necessary */
 	pbyte = bef_sky_padding((size_t) rret, header->header.il_n,
@@ -1567,6 +1560,10 @@ int bef_construct(int input, int output, uint64_t bsize,
 			fprintf(stderr, "Setting il_n to default %u\n",
 				header.il_n);
 	}
+
+	ret = bef_init(header);
+	if(ret != 0)
+		return ret;
 
 	/* Estimate size of our shared input buffer, using bsize and k */
 	ibuf_s = header.il_n * bsize;

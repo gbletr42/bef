@@ -34,6 +34,10 @@
 #ifdef BEF_LIBERASURECODE
 #include <erasurecode.h>
 #endif
+#ifdef BEF_OPENFEC
+#include <openfec/lib_common/of_openfec_api.h>
+#include <openfec/lib_stable/ldpc_staircase/of_ldpc_staircase_api.h>
+#endif
 
 #include <string.h>
 #include <xxhash.h>
@@ -67,6 +71,8 @@
 #define BEF_SPAR_INIT		4
 #define BEF_SPAR_DESTRO		5
 #define BEF_SPAR_MAXNUM		6
+
+#define BEF_RECON_NULL		1
 
 /* Struct for libfec header */
 struct bef_fec_header {
@@ -171,6 +177,27 @@ static void bef_fec_init(uint16_t k, uint16_t m)
 	bef_context = fec_new(k, k+m);
 }
 
+#ifdef BEF_OPENFEC
+static int bef_openfec_init(of_session_t **session, uint16_t k, uint16_t m,
+			    uint64_t nbyte)
+{
+	of_status_t ret;
+	of_parameters_t params = {k, m, nbyte};
+
+	ret = of_create_codec_instance(session,
+				       OF_CODEC_REED_SOLOMON_GF_2_8_STABLE,
+				       OF_ENCODER_AND_DECODER, 0);
+	if(ret != OF_STATUS_OK)
+		return -BEF_ERR_OPENFEC;
+
+	ret = of_set_fec_parameters(*session, &params);
+	if(ret != OF_STATUS_OK)
+		return -BEF_ERR_OPENFEC;
+	else
+		return 0;
+}
+#endif
+
 #ifdef BEF_LIBERASURECODE
 static int bef_liberasurecode_destroy(void)
 {
@@ -188,6 +215,13 @@ static void bef_fec_destroy(void)
 {
 	fec_free(bef_context);
 }
+
+#ifdef BEF_OPENFEC
+static void bef_openfec_destroy(of_session_t *session)
+{
+	of_release_codec_instance(session);
+}
+#endif
 
 /* Our great padding function from the sky. Gives the amount of padded bytes
  * that would satisfy these properties.
@@ -437,7 +471,8 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 #ifdef BEF_LIBERASURECODE
 static int bef_encode_liberasurecode(const char *input, size_t inbyte,
 				     char **data, char **parity,
-				     size_t *frag_len, uint16_t k, uint16_t m)
+				     size_t *frag_len,
+				     struct bef_real_header header)
 {
 	int ret;
 	char **tmp_data;
@@ -449,11 +484,11 @@ static int bef_encode_liberasurecode(const char *input, size_t inbyte,
 		return -ret;
 
 	/* Copy over the results */
-	for(int i = 0; i < k; i++) {
+	for(int i = 0; i < header.k; i++) {
 		*(data + i) = bef_malloc(*frag_len);
 		memcpy(*(data + i), *(tmp_data + i), *frag_len);
 	}
-	for(int i = 0; i < m; i++) {
+	for(int i = 0; i < header.m; i++) {
 		*(parity + i) = bef_malloc(*frag_len);
 		memcpy(*(parity + i), *(tmp_parity + i), *frag_len);
 	}
@@ -462,7 +497,7 @@ static int bef_encode_liberasurecode(const char *input, size_t inbyte,
 	ret = liberasurecode_encode_cleanup(bef_desc, tmp_data, tmp_parity);
 	if(ret < 0) {
 		ret = -ret;
-		bef_encode_free(data, parity, k, m);
+		bef_encode_free(data, parity, header.k, header.m);
 	}
 
 	return ret;
@@ -475,43 +510,43 @@ static int bef_encode_liberasurecode(const char *input, size_t inbyte,
  * it's a primary or secondary block.
  */
 static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
-			     char **parity, size_t *frag_len, uint16_t k,
-			     uint16_t m)
+			     char **parity, size_t *frag_len,
+			     struct bef_real_header header)
 {
-	struct bef_fec_header header = {0};
-	size_t size = inbyte / k; //Size of each data fragment, prepadded
-	unsigned int block_nums[m];
-	*frag_len = sizeof(header) + size;
+	struct bef_fec_header frag_h = {0};
+	size_t size = inbyte / header.k; //Size of each data fragment, prepadded
+	unsigned int block_nums[header.m];
+	*frag_len = sizeof(frag_h) + size;
 
 	/* Allocate our arrays, moving the pointer past the header. I know, it's
 	 * a bit hacky, but it works!
 	 */
-	for(int i = 0; i < k; i++) {
-		*(data + i) = bef_malloc(size + sizeof(header));
-		header.block_num = i;
+	for(int i = 0; i < header.k; i++) {
+		*(data + i) = bef_malloc(size + sizeof(frag_h));
+		frag_h.block_num = i;
 
-		memcpy(*(data + i), &header, sizeof(header));
-		memcpy(*(data + i) + sizeof(header), input + i * size, size);
+		memcpy(*(data + i), &frag_h, sizeof(frag_h));
+		memcpy(*(data + i) + sizeof(frag_h), input + i * size, size);
 
-		*(data + i) += sizeof(header); //Evil and Satanic
+		*(data + i) += sizeof(frag_h); //Evil and Satanic
 	}
-	for(int i = 0; i < m; i++) {
-		*(parity + i) = bef_malloc(size + sizeof(header));
-		block_nums[i] = k + i;
-		header.block_num = k + i;
-		memcpy(*(parity + i), &header, sizeof(header));
-		*(parity + i) += sizeof(header); //Evil and Satanic
+	for(int i = 0; i < header.m; i++) {
+		*(parity + i) = bef_malloc(size + sizeof(frag_h));
+		block_nums[i] = header.k + i;
+		frag_h.block_num = header.k + i;
+		memcpy(*(parity + i), &frag_h, sizeof(frag_h));
+		*(parity + i) += sizeof(frag_h); //Evil and Satanic
 	}
 
 	/* I rather live with the warning than add a million consts */
 	fec_encode(bef_context, (unsigned char **) data,
-		   (unsigned char **) parity, block_nums, m, size);
+		   (unsigned char **) parity, block_nums, header.m, size);
 
 	/* Now set the pointers back */
-	for(int i = 0; i < k; i++)
-		*(data + i) -= sizeof(header);
-	for(int i = 0; i < m; i++)
-		*(parity + i) -= sizeof(header);
+	for(int i = 0; i < header.k; i++)
+		*(data + i) -= sizeof(frag_h);
+	for(int i = 0; i < header.m; i++)
+		*(parity + i) -= sizeof(frag_h);
 
 	return 0;
 }
@@ -523,48 +558,49 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
  * so we'll use our trusty bef_fec_header struct for this essential metadata.
  */
 static int bef_encode_cm256(const char *input, size_t inbyte, char **data,
-			    char **parity, size_t *frag_len, uint16_t k,
-			    uint16_t m)
+			    char **parity, size_t *frag_len,
+			    struct bef_real_header header)
 {
 	int ret;
-	bef_cm256_encoder_params params = {k, m, inbyte / k};
-	bef_cm256_block iblock[k];
-	char *block_buf = bef_malloc(m * params.BlockBytes);
-	struct bef_fec_header header = {0};
+	bef_cm256_encoder_params params = {header.k, header.m,
+					inbyte / header.k};
+	bef_cm256_block iblock[header.k];
+	char *block_buf = bef_malloc(header.m * params.BlockBytes);
+	struct bef_fec_header frag_h = {0};
 	*frag_len = params.BlockBytes + sizeof(header);
 
 	/* Allocate our arrays */
-	for(uint16_t i = 0; i < k; i++) {
-		header.block_num = i;
-		*(data + i) = bef_malloc(params.BlockBytes + sizeof(header));
+	for(uint16_t i = 0; i < header.k; i++) {
+		frag_h.block_num = i;
+		*(data + i) = bef_malloc(params.BlockBytes + sizeof(frag_h));
 
-		memcpy(*(data + i), &header, sizeof(header));
-		memcpy(*(data + i) + sizeof(header),
+		memcpy(*(data + i), &frag_h, sizeof(frag_h));
+		memcpy(*(data + i) + sizeof(frag_h),
 		       input + i * params.BlockBytes, params.BlockBytes);
 	}
-	for(uint16_t i = 0; i < m; i++) {
-		header.block_num = k + i;
-		*(parity + i) = bef_malloc(params.BlockBytes + sizeof(header));
+	for(uint16_t i = 0; i < header.m; i++) {
+		frag_h.block_num = header.k + i;
+		*(parity + i) = bef_malloc(params.BlockBytes + sizeof(frag_h));
 
-		memcpy(*(parity + i), &header, sizeof(header));
+		memcpy(*(parity + i), &frag_h, sizeof(frag_h));
 	}
 
 	/* Set our original blocks */
-	for(uint16_t i = 0; i < k; i++) {
-		iblock[i].Block = *(data + i) + sizeof(header);
+	for(uint16_t i = 0; i < header.k; i++) {
+		iblock[i].Block = *(data + i) + sizeof(frag_h);
 		iblock[i].Index = i;
 	}
 
 	ret = bef_cm256_encode(params, iblock, block_buf);
 	if(ret != 0) {
-		bef_encode_free(data, parity, k, m);
+		bef_encode_free(data, parity, header.k, header.m);
 		ret = -BEF_ERR_CM256;
 		goto out;
 	}
 
 	/* Copy over the parities */
-	for(uint16_t i = 0; i < m; i++)
-		memcpy(*(parity + i) + sizeof(header),
+	for(uint16_t i = 0; i < header.m; i++)
+		memcpy(*(parity + i) + sizeof(frag_h),
 		       block_buf + i * params.BlockBytes, params.BlockBytes);
 
 out:
@@ -573,35 +609,112 @@ out:
 }
 #endif
 
-/* Reconstructs a given array of fragments with a bef_fec_header
+#ifdef BEF_OPENFEC
+/* Like with other relatively low level libraries, this requires we know the
+ * block number. So we use our good old trusty bef_fec_header to provide this
+ * key information.
+ */
+static int bef_encode_openfec(const char *input, size_t inbyte, char **data,
+			      char **parity, size_t *frag_len,
+			      struct bef_real_header header)
+{
+	int ret;
+	of_status_t oret;
+	of_session_t *session = NULL;
+	char *symbol_tbl[header.k + header.m];
+	struct bef_fec_header frag_h = {0};
+	size_t size = inbyte / header.k;
+	uint16_t flag = 0;
+	*frag_len = size + sizeof(frag_h);
+
+	ret = bef_openfec_init(&session, header.k, header.m, size);
+	if(ret != 0)
+		return ret;
+
+	/* Allocate our arrays and set their pointers in the symbol table
+	 * appropiately. Likewise, also encode during this step, as we process
+	 * each symbol individually.
+	 */
+	for(uint16_t i = 0; i < header.k; i++) {
+		frag_h.block_num = i;
+		*(data + i) = bef_malloc(sizeof(frag_h) + size);
+		memcpy(*(data + i), &frag_h, sizeof(frag_h));
+		memcpy(*(data + i) + sizeof(frag_h), input + i * size, size);
+		symbol_tbl[i] = *(data + i) + sizeof(frag_h);
+	}
+	for(uint16_t i = 0; i < header.m && flag == 0; i++) {
+		frag_h.block_num = header.k + i;
+		*(parity + i) = bef_malloc(sizeof(frag_h) + size);
+		memcpy(*(parity + i), &frag_h, sizeof(frag_h));
+		symbol_tbl[header.k + i] = *(parity + i) + sizeof(frag_h);
+
+		oret = of_build_repair_symbol(session, (void **) symbol_tbl,
+					     header.k + i);
+		if(oret != OF_STATUS_OK)
+			flag = i;
+	}
+
+	bef_openfec_destroy(session);
+
+	if(flag != 0) {
+		bef_encode_free(data, parity, header.k, flag);
+		return -BEF_ERR_OPENFEC;
+	} else {
+		return 0;
+	}
+}
+#endif
+
+/* Reconstructs a given array of fragments with a bef_fec_header.
+ *
+ * flag has special behaviors depending on what it is set.
+ * If the first bit is set to BEF_RECON_NULL, then it will set the ones not
+ * found to NULL and NOT move the parities to them. Instead it will consider
+ * recon_arr to be an array of k+m elements and include the parities in their
+ * correct index. In this context, k is assumed to be the number of elements
+ * rather than the number of data fragments. The given block number for that
+ * NULL element will be UINT32_MAX, something a 16bit number like k or k+m could
+ * never reach.
+ *
  * Returns the number of fragments not found (and replaced with recoveries)
  */
 static uint16_t bef_decode_reconstruct(char **frags, char **recon_arr,
 				       uint32_t *block_nums,
-				       uint16_t k, uint16_t m)
+				       uint16_t k, uint16_t m,
+				       uint8_t flag)
 {
+	uint16_t bound = k;
 	uint16_t found = 0;
 	uint16_t counter = 0;
 	uint16_t stack[m];
 	struct bef_fec_header header;
 
-	for(uint16_t i = 0; i < k; i++) {
+	if(flag & BEF_RECON_NULL)
+		bound = k + m;
+
+	for(uint16_t i = 0; i < bound; i++) {
 		memcpy(&header, *(frags + i), sizeof(header));
 
-		if(header.block_num != i + found && i + found < k) {
-			stack[counter++] = i + found;
+		if(header.block_num != i + found && i + found < bound) {
+			if(flag & BEF_RECON_NULL) {
+				recon_arr[i + found] = NULL;
+				block_nums[i + found] = UINT32_MAX;
+			} else {
+				stack[counter++] = i + found;
+			}
+
 			found++;
 			i--; //Keep going until we get to the correct index
 		} else {
 			/* Do our evil pointer arithmetic hackery again */
 			*(frags + i) += sizeof(header);
 
-			if(header.block_num >= k && counter > 0) {
-				recon_arr[stack[--counter]] = *(frags + i);
-				block_nums[stack[counter]] = header.block_num;
-			} else {
+			if(header.block_num < bound && i + found < bound) {
 				recon_arr[header.block_num] = *(frags + i);
 				block_nums[header.block_num] = header.block_num;
+			} else if(counter > 0 && i + found < bound) {
+				recon_arr[stack[--counter]] = *(frags + i);
+				block_nums[stack[counter]] = header.block_num;
 			}
 
 			/* Undo our evil pointer arithmetic hackery */
@@ -614,8 +727,9 @@ static uint16_t bef_decode_reconstruct(char **frags, char **recon_arr,
 
 #ifdef BEF_LIBERASURECODE
 static int bef_decode_liberasurecode(char **frags, uint16_t frag_len,
-				     uint16_t dummy, size_t frag_b,
-				     char **output, size_t *onbyte)
+				     size_t frag_b,
+				     char **output, size_t *onbyte,
+				     struct bef_real_header header)
 {
 	int ret;
 	char *tmp_output;
@@ -649,19 +763,20 @@ static int bef_decode_liberasurecode(char **frags, uint16_t frag_len,
  * we need to reconstruct it in order of block number, replacing missing block
  * numbers with parities.
  */
-static int bef_decode_libfec(char **frags, uint16_t k, uint16_t m,
-			     size_t frag_b, char **output, size_t *onbyte)
+static int bef_decode_libfec(char **frags, uint16_t dummy, size_t frag_b,
+			     char **output, size_t *onbyte,
+			     struct bef_real_header header)
 {
-	char *out_arr[m]; //At most m outputs
-	char *recon_arr[k]; //At most k outputs
-	uint32_t block_nums[k];
+	char *out_arr[header.m]; //At most m outputs
+	char *recon_arr[header.k]; //At most k outputs
+	uint32_t block_nums[header.k];
 	uint16_t found;
 	char *tmp; //To avoid duplicate paths later
-	struct bef_fec_header header;
-	size_t size = frag_b - sizeof(header);
-	*onbyte = size * k;
+	size_t size = frag_b - sizeof(struct bef_fec_header);
+	*onbyte = size * header.k;
 
-	found = bef_decode_reconstruct(frags, recon_arr, block_nums, k, m);
+	found = bef_decode_reconstruct(frags, recon_arr, block_nums,
+				       header.k, header.m, 0);
 	for(uint16_t i = 0; i < found; i++)
 		out_arr[i] = bef_malloc(size);
 
@@ -675,7 +790,7 @@ static int bef_decode_libfec(char **frags, uint16_t k, uint16_t m,
 
 	/* Write to output buffer */
 	found = 0;
-	for(uint16_t i = 0; i < k; i++) {
+	for(uint16_t i = 0; i < header.k; i++) {
 		if(block_nums[i] == i)
 			tmp = recon_arr[i];
 		else
@@ -694,21 +809,23 @@ static int bef_decode_libfec(char **frags, uint16_t k, uint16_t m,
  * its proper state. I should probably make a dedicated function to
  * reconstruction since it seems to pop up frequently...
  */
-static int bef_decode_cm256(char **frags, uint16_t k, uint16_t m,
-			    size_t frag_b, char **output, size_t *onbyte)
+static int bef_decode_cm256(char **frags, uint16_t dummy, size_t frag_b,
+			    char **output, size_t *onbyte,
+			    struct bef_real_header header)
 {
 	int ret;
-	struct bef_fec_header header;
-	uint32_t block_nums[k];
-	char **recon_arr[k];
-	bef_cm256_encoder_params params = {k, m, frag_b - sizeof(header)};
-	bef_cm256_block blocks[k];
-	*onbyte = params.BlockBytes * k;
+	uint32_t block_nums[header.k];
+	char *recon_arr[header.k];
+	bef_cm256_encoder_params params = {header.k, header.m,
+					frag_b - sizeof(struct bef_fec_header)};
+	bef_cm256_block blocks[header.k];
+	*onbyte = params.BlockBytes * header.k;
 	*output = bef_malloc(*onbyte);
 
-	bef_decode_reconstruct(frags, recon_arr, block_nums, k, m);
+	bef_decode_reconstruct(frags, recon_arr, block_nums, header.k, header.m,
+			       0);
 
-	for(uint16_t i = 0; i < k; i++) {
+	for(uint16_t i = 0; i < header.k; i++) {
 		blocks[i].Block = recon_arr[i];
 		blocks[i].Index = (unsigned char) block_nums[i];
 	}
@@ -720,10 +837,64 @@ static int bef_decode_cm256(char **frags, uint16_t k, uint16_t m,
 	}
 
 	/* Copy over our results */
-	for(uint16_t i = 0; i < k; i++)
+	for(uint16_t i = 0; i < header.k; i++)
 		memcpy(*output + i * params.BlockBytes, blocks[i].Block,
 		       params.BlockBytes);
 	return ret;
+}
+#endif
+
+#ifdef BEF_OPENFEC
+/* Like the others, we must reconstruct the given fragments into a more suitable
+ * array. However, openfec wants each missing fragment to be NULL and to have as
+ * many fragments as possible. So we try our best to provide that.
+ */
+static int bef_decode_openfec(char **frags, uint16_t dummy, size_t frag_b,
+			      char **output, size_t *onbyte,
+			      struct bef_real_header header)
+{
+	int ret;
+	of_status_t oret;
+	of_session_t *session = NULL;
+	uint32_t block_nums[header.k+header.m];
+	char *recon_arr[header.k+header.m];
+	char *source_tbl[header.k];
+	size_t size = frag_b - sizeof(struct bef_fec_header);
+	*onbyte = size * header.k;
+
+	ret = bef_openfec_init(&session, header.k, header.m, frag_b);
+	if(ret != 0)
+		return ret;
+
+	bef_decode_reconstruct(frags, recon_arr, block_nums, header.k, header.m,
+			       BEF_RECON_NULL);
+
+	oret = of_set_available_symbols(session, (void **) recon_arr);
+	if(oret != OF_STATUS_OK)
+		return -BEF_ERR_OPENFEC;
+
+	oret = of_finish_decoding(session);
+	if(oret != OF_STATUS_OK)
+		return -BEF_ERR_OPENFEC;
+
+	oret = of_get_source_symbols_tab(session, source_tbl);
+	if(oret != OF_STATUS_OK)
+		return -BEF_ERR_OPENFEC;
+
+	/* Set the source table to point at our output buffer */
+	*output = bef_malloc(*onbyte);
+	for(uint16_t i = 0; i < header.k; i++)
+		memcpy(*output + i * size, source_tbl[i], size);
+
+	/* free the allocated buffer */
+	for(uint16_t i = 0; i < header.k; i++)
+		if(block_nums[i] == UINT32_MAX)
+			free(source_tbl[i]);
+
+	/* Free our context */
+	bef_openfec_destroy(session);
+
+	return 0;
 }
 #endif
 
@@ -785,6 +956,16 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 			*max = 256;
 		break;
 #endif
+#ifdef BEF_OPENFEC
+	case BEF_PAR_OF_V_RS:
+		if(flag == BEF_SPAR_ENCODE)
+			*pp = &bef_encode_openfec;
+		else if(flag == BEF_SPAR_DECODE)
+			*pp = &bef_decode_openfec;
+		else if(flag == BEF_SPAR_MAXFRA)
+			*max = 256;
+		break;
+#endif
 	default:
 		ret = -BEF_ERR_INVALINPUT;
 		break;
@@ -823,23 +1004,23 @@ uint16_t bef_max_frag(bef_par_t par_t)
 }
 
 int bef_encode_ecc(const char *input, size_t inbyte, char **data,
-		   char **parity,  size_t *frag_len, uint16_t k, uint16_t m,
-		   bef_par_t par_t)
+		   char **parity,  size_t *frag_len,
+		   struct bef_real_header header)
 {
 	int ret = 0;
 	int (*f)(const char *, size_t, char **, char **,
-		 size_t *, uint16_t, uint16_t) = NULL;
+		 size_t *, struct bef_real_header header) = NULL;
 
 	if(bef_vflag > 1)
 		fprintf(stderr,
 			"Encoding %zu bytes, k %d, m %d, parity type %u\n",
-			inbyte, k, m, par_t);
+			inbyte, header.k, header.m, header.par_t);
 
-	ret = bef_sky_par(par_t, &f, BEF_SPAR_ENCODE);
+	ret = bef_sky_par(header.par_t, &f, BEF_SPAR_ENCODE);
 	if(ret != 0)
 		return ret;
 
-	ret = (*f)(input, inbyte, data, parity, frag_len, k, m);
+	ret = (*f)(input, inbyte, data, parity, frag_len, header);
 
 	return ret;
 }
@@ -853,33 +1034,33 @@ void bef_encode_free(char **data, char **parity, uint16_t k, uint16_t m)
 }
 
 int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
-		   char **output, size_t *onbyte, uint16_t k, uint16_t m,
-		   bef_par_t par_t)
+		   char **output, size_t *onbyte,
+		   struct bef_real_header header)
 {
 	int ret = 0;
-	int (*f)(char **, uint16_t, uint16_t,
-		 size_t, char **, size_t *) = NULL;
+	int (*f)(char **, uint16_t, size_t, char **, size_t *,
+		 struct bef_real_header header) = NULL;
 
 	/* Not enough fragments */
-	if(frag_len < k)
+	if(frag_len < header.k)
 		return -BEF_ERR_NEEDMORE;
 	else if(frag_len == 0)
 		return -BEF_ERR_INVALINPUT;
 
 	/* All our codes require at least one parity */
-	if(m == 0)
+	if(header.m == 0)
 		return -BEF_ERR_INVALINPUT;
 
 	if(bef_vflag > 1)
 		fprintf(stderr,
 			"Decoding %zu bytes, k %d, m %d, parity type %u\n",
-			frag_b * frag_len, k, m, par_t);
+			frag_b * frag_len, header.k, header.m, header.par_t);
 
-	ret = bef_sky_par(par_t, &f, BEF_SPAR_DECODE);
+	ret = bef_sky_par(header.par_t, &f, BEF_SPAR_DECODE);
 	if(ret != 0)
 		return ret;
 
-	ret = (*f)(frags, frag_len, m, frag_b, output, onbyte);
+	ret = (*f)(frags, frag_len, frag_b, output, onbyte, header);
 
 	return ret;
 }
@@ -933,6 +1114,13 @@ static int bef_construct_header(int input, char **ibuf, size_t *ibuf_s,
 				*bsize);
 	}
 
+	/* Set preliminary nbyte for certain backends that require it */
+	header->header.nbyte = (*ibuf_s / header->header.il_n) / k;
+
+	ret = bef_init(header->header);
+	if(ret != 0)
+		return ret;
+
 	/* Pad out if necessary */
 	pbyte = bef_sky_padding((size_t) rret, header->header.il_n,
 				header->header.k, *bsize);
@@ -945,7 +1133,7 @@ static int bef_construct_header(int input, char **ibuf, size_t *ibuf_s,
 		rret = *ibuf_s / header->header.il_n;
 
 	ret = bef_encode_ecc(*ibuf, rret, data, parity, &frag_len,
-			     k, m, header->header.par_t);
+			     header->header);
 	if(ret != 0)
 		goto out;
 
@@ -1100,8 +1288,7 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 		frags = *(blocks + i);
 
 		ret = bef_encode_ecc(ibuf + i * fbyte, fbyte, frags,
-				     frags + header.k, &tmp_len, header.k,
-				     header.m, header.par_t);
+				     frags + header.k, &tmp_len, header);
 
 #ifdef _OPENMP
 #pragma omp critical
@@ -1238,10 +1425,6 @@ int bef_construct(int input, int output, uint64_t bsize,
 				header.il_n);
 	}
 
-	ret = bef_init(header);
-	if(ret != 0)
-		return ret;
-
 	/* Estimate size of our shared input buffer, using bsize and k */
 	ibuf_s = header.il_n * bsize;
 	ibuf_s += bef_sky_padding(ibuf_s, header.il_n, header.k, bsize);
@@ -1325,14 +1508,14 @@ static int bef_verify_fragment(char *frag, uint64_t nbyte, bef_hash_t hash_t,
 		return 0;
 }
 
-static void bef_deconstruct_buffers(char ****buf_arr, uint16_t k,
+static void bef_deconstruct_buffers(char ****buf_arr, uint16_t km,
 				    uint64_t nbyte, uint16_t il_n)
 {
 	*buf_arr = bef_malloc(il_n * sizeof(*(*buf_arr)));
 	for(uint16_t i = 0; i < il_n; i++) {
-		*(*buf_arr + i) = bef_malloc(k * sizeof(*(*(*buf_arr))));
+		*(*buf_arr + i) = bef_malloc(km * sizeof(*(*(*buf_arr))));
 
-		for(uint16_t j = 0; j < k; j++)
+		for(uint16_t j = 0; j < km; j++)
 			*(*(*buf_arr + i) + j) = bef_malloc(nbyte);
 	}
 }
@@ -1463,7 +1646,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 			flag = BEF_SCAN_FORWARDS;
 			i = frag_h.block_num % header.il_n;
 
-			if(index[i] < header.k) {
+			if(index[i] < header.k + header.m) {
 				memcpy(*(*(buf_arr + i) + index[i]),
 				       ibuf + offset + sizeof(frag_h),
 				       header.nbyte - sizeof(frag_h));
@@ -1503,7 +1686,8 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	struct bef_frag_header frag_h;
 	uint64_t frag_b = header.nbyte - sizeof(frag_h);
 
-	bef_deconstruct_buffers(&buf_arr, header.k, frag_b, header.il_n);
+	bef_deconstruct_buffers(&buf_arr, header.k + header.m, frag_b,
+				header.il_n);
 
 	ret = bef_deconstruct_fragments(ibuf, ibuf_s, buf_arr, pbyte, ahead,
 					il_count, sbyte, header);
@@ -1521,34 +1705,35 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 		if(flag != 0)
 			continue; //Iterate until done
 
-		ret = bef_decode_ecc(*(buf_arr + i), header.k, frag_b, &output,
-				     &onbyte, header.k, header.m, header.par_t);
+		ret = bef_decode_ecc(*(buf_arr + i), header.k + header.m,
+				     frag_b, &output, &onbyte, header);
 #ifdef _OPENMP
 #pragma omp critical
 {
 #endif
 		if(ret != 0)
 			flag = ret;
+		else {
+			/* Allocate our output buffer */
+			if(*obuf_s == 0) {
+				*obuf_s = header.il_n * onbyte;
+				*obuf = bef_malloc(*obuf_s);
+			}
 
-		/* Allocate our output buffer, if not already allocated */
-		if(*obuf_s == 0) {
-			*obuf_s = header.il_n * onbyte;
-			*obuf = bef_malloc(*obuf_s);
+			/* Copy over the results to real output buffer */
+			memcpy(*obuf + i * onbyte, output, onbyte);
+
+			bef_decode_free(output);
 		}
 #ifdef _OPENMP
 }
 #endif
-
-		/* Copy over the results to real output buffer */
-		memcpy(*obuf + i * onbyte, output, onbyte);
-
-		bef_decode_free(output);
 	}
 
 	if(flag != 0)
 		ret = flag;
 out:
-	bef_deconstruct_free(buf_arr, header.k, header.il_n);
+	bef_deconstruct_free(buf_arr, header.k + header.m, header.il_n);
 	return ret;
 }
 

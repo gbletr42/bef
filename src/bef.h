@@ -61,6 +61,7 @@ extern uint16_t bef_numT;
 /* Placeholder error values, to be replaced with more descriptive errors */
 #define BEF_ERR_OPENSSL		1453 //Error in OpenSSL library
 #define BEF_ERR_CM256		1454 //Error in CM256CC library
+#define BEF_ERR_OPENFEC		1455 //Error in OpenFEC library
 
 
 /* Default block size in bytes
@@ -119,6 +120,8 @@ extern uint16_t bef_numT;
 //#define BEF_PAR_PHAZR	9 //Phazr.IO's erasure coding algorithm
 #define BEF_PAR_F_V_RS	10 //zfec's libfec Software Vandermonde Reed Solomon
 #define BEF_PAR_CM_C_RS	11 //cm256cc's Cauchy Reed Solomon
+#define BEF_PAR_OF_V_RS	12 //OpenFEC's Vandermonde Reed Solomon
+#define BEF_PAR_OF_LDPC	13 //OpenFEC's Staircase LDPC
 
 /* I find that, unless it's exceptionally large number of fragments, zfec's
  * modified libfec seems to be by far the fastest
@@ -189,8 +192,8 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
  * error codes not yet defined, but will return 0 when successful
  */
 int bef_encode_ecc(const char *input, size_t inbyte, char **data,
-		   char **parity, size_t *frag_len, uint16_t k, uint16_t m,
-		   bef_par_t par_t);
+		   char **parity, size_t *frag_len,
+		   struct bef_real_header header);
 
 /* Frees the data structures allocated by bef_encode_ecc */
 void bef_encode_free(char **data, char **parity, uint16_t k, uint16_t m);
@@ -204,8 +207,8 @@ void bef_encode_free(char **data, char **parity, uint16_t k, uint16_t m);
  * error codes not yet defined, but will return 0 when successful
  */
 int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
-		   char **output, size_t *onbyte, uint16_t k, uint16_t m,
-		   bef_par_t par_t);
+		   char **output, size_t *onbyte,
+		   struct bef_real_header header);
 
 /* Frees the output buffer from bef_decode_ecc(). Of course you could also just
  * free() it yourself ;)

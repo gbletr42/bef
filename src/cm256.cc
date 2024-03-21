@@ -47,7 +47,6 @@ extern "C" int bef_cm256_encode(bef_cm256_encoder_params params,
 extern "C" int bef_cm256_decode(bef_cm256_encoder_params params,
 				bef_cm256_block *blocks)
 {
-	int ret;
 	CM256::cm256_encoder_params p = {params.OriginalCount,
 					 params.RecoveryCount,
 					 params.BlockBytes};

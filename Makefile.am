@@ -39,5 +39,8 @@ bef_CXXFLAGS = ${CFLAGS} $(CXXFLAGS) -DUSE_SSSE3 #won't build on Arch otherwise.
 bef_SOURCES += src/cm256.cc
 bef_LDADD += -lcm256cc -lstdc++
 endif
+if OPENFEC
+bef_LDADD += -lopenfec
+endif
 
 man_MANS = doc/bef.1

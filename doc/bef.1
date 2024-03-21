@@ -95,6 +95,8 @@ intel-cauchy: The Cauchy Reed Solomon implementation offered by Intel's ISA-L, p
 fec-vand: The Vandermonde Reed Solomon implementation offered by zfec's modified libfec library. Extremely fast and scales well.
 .IP
 cm256-cauchy: The Cauchy Reed Solomon implementation offered by cm256cc.
+.IP
+openfec-vand: The Vandermonde Reed Solomon implementation offered by OpenFEC.
 .TP
 \fB\-H\fR, \fB\-\-hash-type\fR
 The specific hash backend type to use to compute the fragment and header hashes. At this moment, the size of these hashes are at most 256 bits. The options are below, and the default is xxhash as it is exceptionally fast. If one desires cryptographic security against evil corruption, then the best recommendation is either BLAKE3 for a good compromise on speed or SHA256

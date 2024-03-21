@@ -16,6 +16,9 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#ifndef BEF_ZFEC_H
+#define BEF_ZFEC_H 1
+
 #include <stddef.h>
 
 typedef unsigned char gf;
@@ -79,6 +82,8 @@ void fec_decode(const fec_t* code, const gf*restrict const*restrict const inpkts
 #include <alloca.h>
 #endif
 #endif
+
+#endif /* BEF_ZFEC_H */
 
 /*
  * Much of this work is derived from the "fec" software by Luigi Rizzo, et 

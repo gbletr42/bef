@@ -17,6 +17,7 @@
  */
 
 #ifndef BEF_CM256_H
+#define BEF_CM256_H 1
 
 /* Encoder parameters */
 typedef struct cm256_encoder_params_t {

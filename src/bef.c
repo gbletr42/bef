@@ -1033,7 +1033,7 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 {
 	int ret = 0;
 	void **pp = (void **) p;
-	uint16_t *max = (uint16_t *) p;
+	uint32_t *max = (uint32_t *) p;
 	struct bef_real_header *header = (struct bef_real_header *) p;
 
 	if(flag >= BEF_SPAR_MAXNUM)
@@ -1139,7 +1139,7 @@ static int bef_destroy(struct bef_real_header header)
 
 uint16_t bef_max_frag(bef_par_t par_t)
 {
-	uint16_t ret = 0;
+	uint32_t ret = 0;
 
 	bef_sky_par(par_t, &ret, BEF_SPAR_MAXFRA);
 

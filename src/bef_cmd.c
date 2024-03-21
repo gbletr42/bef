@@ -366,7 +366,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if(header.k + header.m > bef_max_frag(header.par_t)) {
+	if(((uint32_t) header.k) + header.m > bef_max_frag(header.par_t)) {
 		fprintf(stderr,
 			"ERROR: number of fragments (%u) is greater than the maximum number for this parity type (%u)\n",
 			header.k + header.m, bef_max_frag(header.par_t));

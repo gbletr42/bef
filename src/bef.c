@@ -19,6 +19,9 @@
 #include "bef.h"
 #include "zfec.h"
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #ifdef BEF_CM256CC
 #include "cm256.h"
 #endif
@@ -37,6 +40,9 @@
 #ifdef BEF_OPENFEC
 #include <openfec/lib_common/of_openfec_api.h>
 #endif
+#ifdef BEF_LEOPARD
+#include <leopard.h>
+#endif
 
 #include <string.h>
 #include <xxhash.h>
@@ -51,9 +57,6 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/param.h>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
 
 #define BEF_SAFE_READ	0
 #define BEF_SAFE_WRITE	1
@@ -197,6 +200,15 @@ static int bef_openfec_init(of_session_t **session, uint16_t k, uint16_t m,
 }
 #endif
 
+#ifdef BEF_LEOPARD
+static int bef_leopard_init(void)
+{
+	if(leo_init() != 0)
+		return -BEF_ERR_LEOPARD;
+	return 0;
+}
+#endif
+
 #ifdef BEF_LIBERASURECODE
 static int bef_liberasurecode_destroy(void)
 {
@@ -227,12 +239,13 @@ static void bef_openfec_destroy(of_session_t *session)
  *
  * 1.	Divisible by il_n
  * 2.	Divisible by k
- * 3.	Large enough to hold inbyte.
+ * 3.	Divisible by 64 (for Leopard's Reed Solomon)
+ * 4.	Large enough to hold inbyte.
  */
 static uint64_t bef_sky_padding(size_t inbyte,
 				uint16_t il_n, uint16_t k, uint64_t bsize)
 {
-	uint64_t common = k * il_n;
+	uint64_t common = k * il_n * 64;
 	uint64_t pbyte = il_n * bsize;
 
 	if(pbyte % common != 0)
@@ -664,6 +677,73 @@ static int bef_encode_openfec(const char *input, size_t inbyte, char **data,
 }
 #endif
 
+#ifdef BEF_LEOPARD
+/* Like a bunch of others, this appears to be highly sensitive to ordering,
+ * reading the rather sparse API it says lost data should be set to NULL (as
+ * like openfec), which implies that it must also be in order. Thus, we'll use
+ * our trusty bef_fec_header again. Damn, who knew needing block numbers was
+ * going to be so ubiquitious? Perhaps liberasurecode is unique in how much
+ * stuff it does for us ^_^.
+ */
+static int bef_encode_leopard(const char *input, size_t inbyte, char **data,
+			      char **parity, size_t *frag_len,
+			      struct bef_real_header header)
+{
+	LeopardResult res;
+	uint32_t work_count;
+	char **work_data;
+	struct bef_fec_header frag_h = {0};
+	uint64_t size = inbyte / header.k;
+	*frag_len = size + sizeof(frag_h);
+
+	work_count = leo_encode_work_count(header.k, header.m);
+	work_data = bef_malloc(work_count * sizeof(*work_data));
+
+	/* Copy over our original buffers. Also do some evil pointer arithmetic
+	 * so we'll be able to use these arrays in the encode function
+	 */
+	for(uint16_t i = 0; i < header.k; i++) {
+		frag_h.block_num = i;
+		*(data + i) = bef_malloc(size + sizeof(frag_h));
+
+		memcpy(*(data + i), &frag_h, sizeof(frag_h));
+		memcpy(*(data + i) + sizeof(frag_h), input + i * size, size);
+		*(data + i) += sizeof(frag_h);
+	}
+	for(uint16_t i = 0; i < header.m; i++) {
+		frag_h.block_num = header.k + i;
+		*(parity + i) = bef_malloc(size + sizeof(frag_h));
+
+		memcpy(*(parity + i), &frag_h, sizeof(frag_h));
+		*(parity + i) += sizeof(frag_h);
+	}
+	for(uint32_t i = 0; i < work_count; i++)
+		*(work_data + i) = bef_malloc(size);
+
+	res = leo_encode(size, header.k, header.m, work_count, data, work_data);
+
+	for(uint32_t i = 0; i < work_count; i++) {
+		if(i < header.m)
+			memcpy(*(parity + i), *(work_data + i), size);
+		free(*(work_data + i));
+	}
+	free(work_data);
+
+	/* Undo our hackery */
+	for(uint16_t i = 0; i < header.k; i++)
+		*(data + i) -= sizeof(frag_h);
+	for(uint16_t i = 0; i < header.m; i++)
+		*(parity + i) -= sizeof(frag_h);
+
+	if(res != Leopard_Success) {
+		bef_encode_free(data, parity, header.k, header.m);
+		return -BEF_ERR_LEOPARD;
+	} else {
+		return 0;
+	}
+}
+#endif
+
 /* Reconstructs a given array of fragments with a bef_fec_header.
  *
  * flag has special behaviors depending on what it is set.
@@ -682,7 +762,7 @@ static uint16_t bef_decode_reconstruct(char **frags, char **recon_arr,
 				       uint16_t k, uint16_t m,
 				       uint8_t flag)
 {
-	uint16_t bound = k;
+	uint32_t bound = k;
 	uint16_t found = 0;
 	uint16_t counter = 0;
 	uint16_t stack[m];
@@ -897,6 +977,58 @@ static int bef_decode_openfec(char **frags, uint16_t dummy, size_t frag_b,
 }
 #endif
 
+#ifdef BEF_LEOPARD
+static int bef_decode_leopard(char **frags, uint16_t dummy, size_t frag_b,
+			      char **output, size_t *onbyte,
+			      struct bef_real_header header)
+{
+	int ret = 0;
+	LeopardResult res;
+	uint32_t work_count;
+	char **work_data;
+	char **recon_arr;
+	uint32_t *block_nums;
+	uint64_t size = frag_b - sizeof(struct bef_fec_header);
+
+	recon_arr = bef_malloc((header.k + header.m) * sizeof(*recon_arr));
+	block_nums = bef_malloc((header.k + header.m) * sizeof(*block_nums));
+	*onbyte = size * header.k;
+	*output = bef_malloc(*onbyte);
+	work_count = leo_decode_work_count(header.k, header.m);
+	work_data = bef_malloc(work_count * sizeof(*work_data));
+
+	for(uint32_t i = 0; i < work_count; i++)
+		*(work_data + i) = bef_malloc(size);
+
+	bef_decode_reconstruct(frags, recon_arr, block_nums, header.k,
+			       header.m, BEF_RECON_NULL);
+
+	res = leo_decode(size, header.k, header.m, work_count,
+			 recon_arr, recon_arr + header.k, work_data);
+	if(res == Leopard_Success) {
+		for(uint16_t i = 0; i < header.k; i++) {
+			if(*(recon_arr + i) == NULL)
+				memcpy(*output + i * size, *(work_data + i),
+				       size);
+			else
+				memcpy(*output + i * size, *(recon_arr + i),
+				       size);
+		}
+	} else {
+		bef_decode_free(*output);
+		ret = -BEF_ERR_LEOPARD;
+	}
+
+	for(uint32_t i = 0; i < work_count; i++)
+		free(*(work_data + i));
+	free(work_data);
+
+	free(recon_arr);
+	free(block_nums);
+	return ret;
+}
+#endif
+
 static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 {
 	int ret = 0;
@@ -963,6 +1095,18 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 			*pp = &bef_decode_openfec;
 		else if(flag == BEF_SPAR_MAXFRA)
 			*max = 256;
+		break;
+#endif
+#ifdef BEF_LEOPARD
+	case BEF_PAR_L_F_RS:
+		if(flag == BEF_SPAR_ENCODE)
+			*pp = &bef_encode_leopard;
+		else if(flag == BEF_SPAR_DECODE)
+			*pp = &bef_decode_leopard;
+		else if(flag == BEF_SPAR_MAXFRA)
+			*max = 65535;
+		else if(flag == BEF_SPAR_INIT)
+			ret = bef_leopard_init();
 		break;
 #endif
 	default:

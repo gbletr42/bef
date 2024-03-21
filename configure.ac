@@ -40,6 +40,8 @@ AC_ARG_WITH([openssl], [AS_HELP_STRING([--with-openssl], [enable OpenSSL support
 AC_ARG_WITH([liberasurecode], [AS_HELP_STRING([--with-liberasurecode], [enable liberasurecode support])], [AC_DEFINE([BEF_LIBERASURECODE], 1, [enables liberasurecode support]) AC_CHECK_HEADERS([erasurecode.h]) erasurecode=yes], [])
 AC_ARG_WITH([cm256cc], [AS_HELP_STRING([--with-cm256cc], [enable cm256cc support])], [AC_DEFINE([BEF_CM256CC], 1, [enables cm256cc support]) cm256cc=yes], [])
 AC_ARG_WITH([openfec], [AS_HELP_STRING([--with-openfec], [enable openfec support])], [AC_DEFINE([BEF_OPENFEC], 1, [enables openfec support]) openfec=yes], [])
+AC_ARG_WITH([leopard], [AS_HELP_STRING([--with-leopard], [enable leopard support])], [AC_DEFINE([BEF_LEOPARD], 1, [enables leopard support]) leopard=yes], [])
+AC_ARG_WITH([wirehair], [AS_HELP_STRING([--with-wirehair], [enable wirehair support])], [AC_DEFINE([BEF_WIREHAIR], 1, [enables wirehair support]) wirehair=yes], [])
 AC_CHECK_HEADERS([jerasure.h] [isa-l.h])
 
 dnl Check some specific structs and such
@@ -53,6 +55,8 @@ AM_CONDITIONAL([OPENSSL], [test "$openssl" == "yes"])
 AM_CONDITIONAL([LIBERASURECODE], [test "$erasurecode" == "yes"])
 AM_CONDITIONAL([CM256CC], [test "$cm256cc" == "yes"])
 AM_CONDITIONAL([OPENFEC], [test "$openfec" == "yes"])
+AM_CONDITIONAL([LEOPARD], [test "$leopard" == "yes"])
+AM_CONDITIONAL([WIREHAIR], [test "$wirehair" == "yes"])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

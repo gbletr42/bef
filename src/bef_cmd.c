@@ -295,6 +295,8 @@ int main(int argc, char **argv) {
 				header.par_t = BEF_PAR_CM_C_RS;
 			} else if(strcmp(optarg, "openfec-vand") == 0) {
 				header.par_t = BEF_PAR_OF_V_RS;
+			} else if(strcmp(optarg, "leopard") == 0) {
+				header.par_t = BEF_PAR_L_F_RS;
 			} else {
 				fprintf(stderr,
 					"Input a proper value for -P!\n");

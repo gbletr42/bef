@@ -43,5 +43,11 @@ endif
 if OPENFEC
 bef_LDADD += -lopenfec
 endif
+if LEOPARD
+bef_LDADD += -lleopard
+endif
+if WIREHAIR
+bef_LDADD += -lwirehair
+endif
 
 man_MANS = doc/bef.1

@@ -62,6 +62,8 @@ extern uint16_t bef_numT;
 #define BEF_ERR_OPENSSL		1453 //Error in OpenSSL library
 #define BEF_ERR_CM256		1454 //Error in CM256CC library
 #define BEF_ERR_OPENFEC		1455 //Error in OpenFEC library
+#define BEF_ERR_LEOPARD		1456 //Error in Leopard library
+#define BEF_ERR_WIREHAIR	1457 //Error in Wirehair library
 
 
 /* Default block size in bytes
@@ -103,10 +105,6 @@ extern uint16_t bef_numT;
 #define BEF_HASH_XXHASH		9 //Default, fast and reasonably secure
 #define BEF_HASH_DEFAULT	BEF_HASH_XXHASH
 
-/* Our parity library backends */
-#define BEF_BACKEND_LIBERASURECODE	1
-#define BEF_BACKEND_LIBFEC		2
-
 /* Our parity types, currently just copied liberasurecode
  * Haven't used/benchmarked non reed solomon codes */
 //#define BEF_PAR_NONE	1 //No erasure code parities of any kind
@@ -121,9 +119,12 @@ extern uint16_t bef_numT;
 #define BEF_PAR_F_V_RS	10 //zfec's libfec Software Vandermonde Reed Solomon
 #define BEF_PAR_CM_C_RS	11 //cm256cc's Cauchy Reed Solomon
 #define BEF_PAR_OF_V_RS	12 //OpenFEC's Vandermonde Reed Solomon
+//#define BEF_PAR_OF_LDPC 13 //OpenFEC's LDPC Staircase
+#define BEF_PAR_L_F_RS	14 //Chris Taylor's FFT Reed Solomon, Leopard
+#define BEF_PAR_W_FC	15 //Chris Taylor's Fountain Code Wirehair
 
-/* I find that, unless it's exceptionally large number of fragments, zfec's
- * modified libfec seems to be by far the fastest
+/* I find that generally my optimized version of zfec is pretty darn fast, and
+ * it isn't an outside dependency.
  */
 #define BEF_PAR_DEFAULT	BEF_PAR_F_V_RS
 

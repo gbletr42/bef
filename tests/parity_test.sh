@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-for parity in jerasure-vand jerasure-cauchy liberasurecode-vand intel-vand intel-cauchy fec-vand cm256-cauchy
+for parity in jerasure-vand jerasure-cauchy liberasurecode-vand intel-vand intel-cauchy fec-vand cm256-cauchy openfec-vand leopard wirehair
 do
 	for file in test1 test2 test3
 	do

@@ -867,7 +867,8 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 			if(header.block_num < bound && i + found < bound) {
 				recon_arr[header.block_num] = *(frags + i);
 				block_nums[header.block_num] = header.block_num;
-			} else if(counter > 0 && i + found < bound) {
+			} else if(counter > 0 && i + found < k + m &&
+				  header.block_num < k + m) {
 				recon_arr[stack[--counter]] = *(frags + i);
 				block_nums[stack[counter]] = header.block_num;
 			}

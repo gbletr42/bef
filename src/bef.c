@@ -847,7 +847,7 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 	if(flag & BEF_RECON_NULL)
 		bound = k + m;
 
-	for(uint32_t i = 0; i < frag_len; i++) {
+	for(uint32_t i = 0; i + found < bound;) {
 		memcpy(&header, *(frags + i), sizeof(header));
 
 		if(header.block_num != i + found && i + found < bound) {
@@ -876,6 +876,18 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 			/* Undo our evil pointer arithmetic hackery */
 			*(frags + i) -= sizeof(header);
 		}
+
+		/* Keep adding i if it is in range or has overflowed
+		 * Since k+m can be at most 17 bits, it cannot reach UINT32_MAX
+		 * unless it has overflowed when decrementing from i = 0
+		 *
+		 * When we have reached the end of the array, increment found as
+		 * it indicates there are missing tail fragments.
+		 */
+		if(i < frag_len - 1 || i == UINT32_MAX)
+			i++;
+		else if(i == frag_len - 1)
+			found++;
 	}
 
 	return found;
@@ -1070,6 +1082,7 @@ static int bef_decode_leopard(char **frags, uint32_t frag_len, size_t frag_b,
 	uint64_t size = frag_b - sizeof(struct bef_fec_header);
 
 	recon_arr = bef_malloc((header.k + header.m) * sizeof(*recon_arr));
+	memset(recon_arr, '\1', (header.k + header.m) * sizeof(*recon_arr));
 	block_nums = bef_malloc((header.k + header.m) * sizeof(*block_nums));
 	*onbyte = size * header.k;
 	*output = bef_malloc(*onbyte);

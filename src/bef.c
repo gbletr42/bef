@@ -589,7 +589,7 @@ static int bef_encode_cm256(const char *input, size_t inbyte, char **data,
 	bef_cm256_encoder_params params = {header.k, header.m,
 					inbyte / header.k};
 	bef_cm256_block iblock[header.k];
-	char *block_buf = bef_malloc(header.m * params.BlockBytes);
+	char *block_buf = bef_malloc((uint64_t) header.m * params.BlockBytes);
 	struct bef_fec_header frag_h = {0};
 	*frag_len = params.BlockBytes + sizeof(frag_h);
 
@@ -977,7 +977,7 @@ static int bef_decode_cm256(char **frags, uint32_t dummy, size_t frag_b,
 	bef_cm256_encoder_params params = {header.k, header.m,
 					frag_b - sizeof(struct bef_fec_header)};
 	bef_cm256_block blocks[header.k];
-	*onbyte = params.BlockBytes * header.k;
+	*onbyte = (uint64_t) params.BlockBytes * header.k;
 	*output = bef_malloc(*onbyte);
 
 	bef_decode_reconstruct(frags, header.k, recon_arr, block_nums,
@@ -1963,6 +1963,9 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	struct bef_frag_header frag_h;
 	uint64_t frag_b = header.nbyte - sizeof(frag_h);
 
+	if(frag_b > header.nbyte)
+		return -BEF_ERR_OVERFLOW;
+
 	bef_deconstruct_buffers(&buf_arr, (uint32_t) header.k + header.m,
 				frag_b, header.il_n);
 
@@ -2126,14 +2129,21 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 				sbyte);
 	}
 
+	sbyte *= header.il_n * ((uint32_t) header.k + header.m);
+
+	if(header.nbyte >=
+	   (UINT64_MAX - sbyte) / (((uint32_t) header.k + header.m) * header.il_n))
+		return -BEF_ERR_INVALINPUT;
+
 	/* Allocate our buffers */
 	ibuf_s = ((uint32_t) header.k + header.m) * header.nbyte * header.il_n;
 	/* Allocate extra for scanning, plus align it with fragment size */
-	if(sbyte * header.il_n * ((uint32_t) header.k + header.m) >= header.nbyte)
-		ibuf_s += sbyte * header.il_n * ((uint32_t) header.k + header.m);
+	if(sbyte >= header.nbyte)
+		ibuf_s += sbyte;
 	else
 		ibuf_s += header.nbyte;
 	ibuf_s = (ibuf_s / header.nbyte) * header.nbyte;
+	sbyte /= header.il_n * ((uint32_t) header.k + header.m);
 	ibuf = bef_malloc(ibuf_s);
 
 	/* Another eternal read loop incoming */

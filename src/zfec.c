@@ -94,7 +94,7 @@ _init_mul_table(void) {
 }
 
 #define NEW_GF_MATRIX(rows, cols) \
-    (gf*)malloc(rows * cols)
+    (gf*)malloc((unsigned int) rows * cols)
 
 /*
  * initialize the data structures used for computations in GF.
@@ -549,7 +549,7 @@ fec_new(unsigned short k, unsigned short n) {
     retval->k = k;
     retval->n = n;
     retval->enc_matrix = NEW_GF_MATRIX (n, k);
-    retval->magic = ((FEC_MAGIC ^ k) ^ n) ^ (unsigned long) (retval->enc_matrix);
+    retval->magic = ((unsigned long) (FEC_MAGIC ^ k) ^ n) ^ (unsigned long) (retval->enc_matrix);
     tmp_m = NEW_GF_MATRIX (n, k);
     /*
      * fill the matrix with powers of field elements, starting from 0.
@@ -628,7 +628,7 @@ build_decode_matrix_into_space(const fec_t*restrict const code, const unsigned*c
 
 void
 fec_decode(const fec_t* code, const gf*restrict const*restrict const inpkts, gf*restrict const*restrict const outpkts, const unsigned*restrict const index, size_t sz) {
-    gf* m_dec = (gf*)alloca(code->k * code->k);
+    gf* m_dec = (gf*)alloca((unsigned long) code->k * code->k);
 
     /* char is large enough for outix - it counts the number of primary blocks
        we are decoding for return.  the most primary blocks we might have to

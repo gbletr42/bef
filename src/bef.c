@@ -77,6 +77,7 @@
 #define BEF_SPAR_DESTRO		5
 #define BEF_SPAR_MAXNUM		6
 
+#define BEF_RECON_REPLACE	0
 #define BEF_RECON_NULL		1
 
 /* Struct for libfec header */
@@ -823,13 +824,11 @@ static int bef_encode_wirehair(const char *input, size_t inbyte, char **data,
 /* Reconstructs a given array of fragments with a bef_fec_header.
  *
  * flag has special behaviors depending on what it is set.
- * If the first bit is set to BEF_RECON_NULL, then it will set the ones not
- * found to NULL and NOT move the parities to them. Instead it will consider
- * recon_arr to be an array of k+m elements and include the parities in their
- * correct index. In this context, k is assumed to be the number of elements
- * rather than the number of data fragments. The given block number for that
- * NULL element will be UINT32_MAX, something a 16bit number like k or k+m could
- * never reach.
+ * If flag is set to BEF_RECON_NULL, then it will set the ones not found to NULL
+ * and NOT move the parities to them. Instead it will consider recon_arr to be
+ * an array of k+m elements and include the parities in their correct index.
+ * The given block number for that NULL element will be UINT32_MAX, something
+ * a 16bit number like k or k+m could never reach.
  *
  * Returns the number of fragments not found (and replaced with recoveries)
  */
@@ -838,13 +837,14 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 				       uint32_t k, uint16_t m,
 				       uint8_t flag)
 {
+	uint32_t ret = 0;
 	uint32_t bound = k;
 	uint32_t found = 0;
 	uint16_t counter = 0;
 	uint16_t stack[m];
 	struct bef_fec_header header;
 
-	if(flag & BEF_RECON_NULL)
+	if(flag == BEF_RECON_NULL)
 		bound = k + m;
 
 	for(uint32_t i = 0; i + found < k + m;) {
@@ -852,11 +852,12 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 
 		if(header.block_num != i + found) {
 			if(i + found < bound) {
-				if(flag & BEF_RECON_NULL) {
+				if(flag == BEF_RECON_NULL) {
 					recon_arr[i + found] = NULL;
 					block_nums[i + found] = UINT32_MAX;
 				} else {
 					stack[counter++] = i + found;
+					ret++;
 				}
 			}
 
@@ -891,13 +892,16 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 		if(i < frag_len - 1 || i == UINT32_MAX)
 			i++;
 		else if(i == frag_len - 1 &&
-			(counter > 0 || flag & BEF_RECON_NULL))
+			(counter > 0 || flag == BEF_RECON_NULL))
 			found++;
 		else if(i == frag_len - 1 && counter == 0)
 			found = k + m - i;
 	}
 
-	return found;
+	if(flag == BEF_RECON_NULL)
+		return found;
+	else
+		return ret;
 }
 
 #ifdef BEF_LIBERASURECODE
@@ -952,7 +956,8 @@ static int bef_decode_libfec(char **frags, uint32_t frag_len, size_t frag_b,
 
 	/* We are guaranteed at least k, and that's all we need */
 	found = bef_decode_reconstruct(frags, header.k, recon_arr, block_nums,
-				       (uint32_t) header.k, header.m, 0);
+				       (uint32_t) header.k, header.m,
+				       BEF_RECON_REPLACE);
 	for(uint32_t i = 0; i < found; i++)
 		out_arr[i] = bef_malloc(size);
 
@@ -1000,7 +1005,8 @@ static int bef_decode_cm256(char **frags, uint32_t dummy, size_t frag_b,
 	*output = bef_malloc(*onbyte);
 
 	bef_decode_reconstruct(frags, header.k, recon_arr, block_nums,
-			       (uint32_t) header.k, header.m, 0);
+			       (uint32_t) header.k, header.m,
+			       BEF_RECON_REPLACE);
 
 	for(uint16_t i = 0; i < header.k; i++) {
 		blocks[i].Block = recon_arr[i];
@@ -1089,7 +1095,6 @@ static int bef_decode_leopard(char **frags, uint32_t frag_len, size_t frag_b,
 	uint64_t size = frag_b - sizeof(struct bef_fec_header);
 
 	recon_arr = bef_malloc((header.k + header.m) * sizeof(*recon_arr));
-	memset(recon_arr, '\1', (header.k + header.m) * sizeof(*recon_arr));
 	block_nums = bef_malloc((header.k + header.m) * sizeof(*block_nums));
 	*onbyte = size * header.k;
 	*output = bef_malloc(*onbyte);

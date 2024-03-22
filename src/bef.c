@@ -591,7 +591,7 @@ static int bef_encode_cm256(const char *input, size_t inbyte, char **data,
 	bef_cm256_block iblock[header.k];
 	char *block_buf = bef_malloc(header.m * params.BlockBytes);
 	struct bef_fec_header frag_h = {0};
-	*frag_len = params.BlockBytes + sizeof(header);
+	*frag_len = params.BlockBytes + sizeof(frag_h);
 
 	/* Allocate our arrays */
 	for(uint16_t i = 0; i < header.k; i++) {

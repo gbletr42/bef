@@ -850,12 +850,14 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 	for(uint32_t i = 0; i + found < k + m;) {
 		memcpy(&header, *(frags + i), sizeof(header));
 
-		if(header.block_num != i + found && i + found < bound) {
-			if(flag & BEF_RECON_NULL) {
-				recon_arr[i + found] = NULL;
-				block_nums[i + found] = UINT32_MAX;
-			} else {
-				stack[counter++] = i + found;
+		if(header.block_num != i + found) {
+			if(i + found < bound) {
+				if(flag & BEF_RECON_NULL) {
+					recon_arr[i + found] = NULL;
+					block_nums[i + found] = UINT32_MAX;
+				} else {
+					stack[counter++] = i + found;
+				}
 			}
 
 			found++;
@@ -867,8 +869,7 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 			if(header.block_num < bound && i + found < bound) {
 				recon_arr[header.block_num] = *(frags + i);
 				block_nums[header.block_num] = header.block_num;
-			} else if(counter > 0 && i + found < k + m &&
-				  header.block_num < k + m) {
+			} else if(counter > 0) {
 				recon_arr[stack[--counter]] = *(frags + i);
 				block_nums[stack[counter]] = header.block_num;
 			}

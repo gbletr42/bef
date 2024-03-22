@@ -7,11 +7,21 @@ do
 	do
 		bef -c -P $parity -i $file -o $file.bef
 		#by default, we should be secure against 4K burst corruption
-		dd if=/dev/zero of=$file.bef bs=4K count=1 oseek=4 conv=notrunc
+		dd if=/dev/zero of=$file.bef bs=4K count=1 oseek=4 conv=notrunc status=none
 
 		if ! cmp $file <(bef -d -i $file.bef)
 		then
 			echo "parity test for $parity on $file failed!"
 		fi
 	done
+
+	bef -c -P $parity -i test3 -o test3.bef
+	for((i = 1; i < 800; i++))
+	do
+		dd if=/dev/zero of=test3.bef oseek=$(($i * 32)) bs=16K count=1 conv=notrunc status=none
+	done
+	if ! cmp test3 <(bef -d -i test3.bef)
+	then
+		echo "parity $parity failed error resiliency test!"
+	fi
 done

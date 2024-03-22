@@ -20,7 +20,7 @@ do
 
 	#Enlarge the file by 1 byte so that it's not evenly aligned
 	#Tests whether it can handle uneven data layouts
-	dd if=/dev/urandom of=testbyte bs=1 count=1
+	dd if=/dev/urandom of=testbyte bs=1 count=1 status=none
 	cat $file testbyte > ${file}byte
 
 	if ! cmp ${file}byte <(cat ${file}byte | bef -c | bef -d)

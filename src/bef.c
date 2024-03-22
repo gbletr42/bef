@@ -2129,7 +2129,7 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 				sbyte);
 	}
 
-	sbyte *= header.il_n * ((uint32_t) header.k + header.m);
+	sbyte *= (size_t) header.il_n * ((uint32_t) header.k + header.m);
 
 	if(header.nbyte >=
 	   (UINT64_MAX - sbyte) / (((uint32_t) header.k + header.m) * header.il_n))
@@ -2143,7 +2143,7 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	else
 		ibuf_s += header.nbyte;
 	ibuf_s = (ibuf_s / header.nbyte) * header.nbyte;
-	sbyte /= header.il_n * ((uint32_t) header.k + header.m);
+	sbyte /= (size_t) header.il_n * ((uint32_t) header.k + header.m);
 	ibuf = bef_malloc(ibuf_s);
 
 	/* Another eternal read loop incoming */

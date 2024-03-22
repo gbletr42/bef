@@ -94,7 +94,7 @@ _init_mul_table(void) {
 }
 
 #define NEW_GF_MATRIX(rows, cols) \
-    (gf*)malloc((unsigned int) rows * cols)
+    (gf*)malloc((size_t) rows * cols)
 
 /*
  * initialize the data structures used for computations in GF.
@@ -572,7 +572,7 @@ fec_new(unsigned short k, unsigned short n) {
     /*
      * the upper matrix is I so do not bother with a slow multiply
      */
-    memset (retval->enc_matrix, '\0', k * k * sizeof (gf));
+    memset (retval->enc_matrix, '\0', (unsigned long) k * k * sizeof (gf));
     for (p = retval->enc_matrix, col = 0; col < k; col++, p += k + 1)
         *p = 1;
     free (tmp_m);
@@ -588,7 +588,8 @@ fec_new(unsigned short k, unsigned short n) {
 
 void
 fec_encode(const fec_t* code, const gf*restrict const*restrict const src, gf*restrict const*restrict const fecs, const unsigned*restrict const block_nums, size_t num_block_nums, size_t sz) {
-    unsigned char i, j;
+    size_t i;
+    unsigned short j;
     size_t k;
     unsigned fecnum;
     const gf* p;
@@ -613,7 +614,7 @@ fec_encode(const fec_t* code, const gf*restrict const*restrict const src, gf*res
  */
 void
 build_decode_matrix_into_space(const fec_t*restrict const code, const unsigned*const restrict index, const unsigned k, gf*restrict const matrix) {
-    unsigned short i;
+    unsigned int i;
     gf* p;
     for (i=0, p=matrix; i < k; i++, p += k) {
         if (index[i] < k) {

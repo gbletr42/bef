@@ -835,7 +835,7 @@ static int bef_encode_wirehair(const char *input, size_t inbyte, char **data,
  */
 static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 				       char **recon_arr, uint32_t *block_nums,
-				       uint16_t k, uint16_t m,
+				       uint32_t k, uint16_t m,
 				       uint8_t flag)
 {
 	uint32_t bound = k;
@@ -847,7 +847,7 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 	if(flag & BEF_RECON_NULL)
 		bound = k + m;
 
-	for(uint32_t i = 0; i + found < bound;) {
+	for(uint32_t i = 0; i + found < k + m;) {
 		memcpy(&header, *(frags + i), sizeof(header));
 
 		if(header.block_num != i + found && i + found < bound) {
@@ -882,12 +882,18 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 		 * unless it has overflowed when decrementing from i = 0
 		 *
 		 * When we have reached the end of the array, increment found as
-		 * it indicates there are missing tail fragments.
+		 * it indicates there are missing tail fragments. If flag does
+		 * not contain BEF_RECON_NULL, and counter is equal to 0, then
+		 * we end the loop's condition by setting found equal to the
+		 * difference between i and k + m.
 		 */
 		if(i < frag_len - 1 || i == UINT32_MAX)
 			i++;
-		else if(i == frag_len - 1)
+		else if(i == frag_len - 1 &&
+			(counter > 0 || flag & BEF_RECON_NULL))
 			found++;
+		else if(i == frag_len - 1 && counter == 0)
+			found = k + m - i;
 	}
 
 	return found;
@@ -945,7 +951,7 @@ static int bef_decode_libfec(char **frags, uint32_t frag_len, size_t frag_b,
 
 	/* We are guaranteed at least k, and that's all we need */
 	found = bef_decode_reconstruct(frags, header.k, recon_arr, block_nums,
-				       header.k, header.m, 0);
+				       (uint32_t) header.k, header.m, 0);
 	for(uint32_t i = 0; i < found; i++)
 		out_arr[i] = bef_malloc(size);
 
@@ -993,7 +999,7 @@ static int bef_decode_cm256(char **frags, uint32_t dummy, size_t frag_b,
 	*output = bef_malloc(*onbyte);
 
 	bef_decode_reconstruct(frags, header.k, recon_arr, block_nums,
-			       header.k, header.m, 0);
+			       (uint32_t) header.k, header.m, 0);
 
 	for(uint16_t i = 0; i < header.k; i++) {
 		blocks[i].Block = recon_arr[i];
@@ -1037,7 +1043,7 @@ static int bef_decode_openfec(char **frags, uint32_t frag_len, size_t frag_b,
 		return ret;
 
 	bef_decode_reconstruct(frags, frag_len, recon_arr, block_nums,
-			       header.k, header.m, BEF_RECON_NULL);
+			       (uint32_t) header.k, header.m, BEF_RECON_NULL);
 
 	oret = of_set_available_symbols(session, (void **) recon_arr);
 	if(oret != OF_STATUS_OK)
@@ -1092,8 +1098,8 @@ static int bef_decode_leopard(char **frags, uint32_t frag_len, size_t frag_b,
 	for(uint32_t i = 0; i < work_count; i++)
 		*(work_data + i) = bef_malloc(size);
 
-	bef_decode_reconstruct(frags, frag_len, recon_arr, block_nums, header.k,
-			       header.m, BEF_RECON_NULL);
+	bef_decode_reconstruct(frags, frag_len, recon_arr, block_nums,
+			       (uint32_t) header.k, header.m, BEF_RECON_NULL);
 
 	res = leo_decode(size, header.k, header.m, work_count,
 			 recon_arr, recon_arr + header.k, (void **) work_data);

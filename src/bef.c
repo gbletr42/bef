@@ -927,7 +927,7 @@ static int bef_decode_libfec(char **frags, uint32_t frag_len, size_t frag_b,
 	char *recon_arr[header.k]; //At most k outputs
 	uint32_t block_nums[header.k];
 	uint32_t found;
-	char *tmp; //To avoid duplicate paths later
+	char *tmp = NULL; //To avoid duplicate paths later
 	size_t size = frag_b - sizeof(struct bef_fec_header);
 	*onbyte = size * header.k;
 
@@ -946,14 +946,15 @@ static int bef_decode_libfec(char **frags, uint32_t frag_len, size_t frag_b,
 			   (unsigned int *) block_nums, size);
 
 	/* Write to output buffer */
-	found = 0;
-	for(uint16_t i = 0; i < header.k; i++) {
+	for(uint16_t i = 0, j = 0; i < header.k; i++) {
 		if(block_nums[i] == i)
 			tmp = recon_arr[i];
-		else
-			tmp = out_arr[found++];
+		else if(j < found)
+			tmp = out_arr[j++];
 
-		memcpy(*output + i * size, tmp, size);
+		if(tmp != NULL)
+			memcpy(*output + i * size, tmp, size);
+		tmp = NULL;
 	}
 
 	for(uint32_t i = 0; i < found; i++)
@@ -1541,6 +1542,7 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 	size_t fbyte = (ibuf_s + pbyte) / header.il_n;
 
 	memset(ibuf + ibuf_s, '\0', pbyte);
+	memset(block_stat, '\0', header.il_n);
 
 	bef_construct_buffers(&blocks, (uint32_t) header.k + header.m,
 			      header.il_n);

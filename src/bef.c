@@ -43,6 +43,9 @@
 #ifdef BEF_LEOPARD
 #include <leopard.h>
 #endif
+#ifdef BEF_WIREHAIR
+#include <wirehair/wirehair.h>
+#endif
 
 #include <string.h>
 #include <xxhash.h>
@@ -79,7 +82,7 @@
 /* Struct for libfec header */
 struct bef_fec_header {
 	uint32_t block_num;
-	uint32_t padding;
+	uint32_t nbyte; //For backends that have variable number of bytes
 };
 
 #ifdef BEF_LIBERASURECODE
@@ -205,6 +208,15 @@ static int bef_leopard_init(void)
 {
 	if(leo_init() != 0)
 		return -BEF_ERR_LEOPARD;
+	return 0;
+}
+#endif
+
+#ifdef BEF_WIREHAIR
+static int bef_wirehair_init(void)
+{
+	if(wirehair_init() != 0)
+		return -BEF_ERR_WIREHAIR;
 	return 0;
 }
 #endif
@@ -696,6 +708,10 @@ static int bef_encode_leopard(const char *input, size_t inbyte, char **data,
 	uint64_t size = inbyte / header.k;
 	*frag_len = size + sizeof(frag_h);
 
+	/* Leopard only works when m <= k */
+	if(header.m > header.k)
+		return -BEF_ERR_INVALINPUT;
+
 	work_count = leo_encode_work_count(header.k, header.m);
 	work_data = bef_malloc(work_count * sizeof(*work_data));
 
@@ -744,6 +760,67 @@ static int bef_encode_leopard(const char *input, size_t inbyte, char **data,
 }
 #endif
 
+#ifdef BEF_WIREHAIR
+/* Another one where we need to store block numbers in a bef_fec_header. This
+ * also has the prereq that k <= 64000, although an unlimited number of parities
+ * can be produced. Currently our library isn't suited for when k+m > 65535, as
+ * there are various integer overflow bugs, so we'll cap out for now at 65535
+ * (although we could support upwards to 129536 fragments per block here)
+ */
+static int bef_encode_wirehair(const char *input, size_t inbyte, char **data,
+			       char **parity, size_t *frag_len,
+			       struct bef_real_header header)
+{
+	WirehairResult res;
+	WirehairCodec codec = NULL;
+	uint64_t size = inbyte / header.k;
+	struct bef_fec_header frag_h = {0};
+	*frag_len = size + sizeof(frag_h);
+
+	if(size > UINT32_MAX || (header.k > 64000 || header.k < 2))
+		return -BEF_ERR_INVALINPUT;
+
+	/* Allocate our arrays */
+	for(uint16_t i = 0; i < header.k; i++) {
+		frag_h.block_num = i;
+		frag_h.nbyte = size;
+		*(data + i) = bef_malloc(size + sizeof(frag_h));
+
+		memcpy(*(data + i), &frag_h, sizeof(frag_h));
+		memcpy(*(data + i) + sizeof(frag_h), input + i * size, size);
+	}
+	for(uint16_t i = 0; i < header.m; i++) {
+		/* We need to zero out the parities in case nbyte < frag_b */
+		*(parity + i) = bef_calloc(1, size + sizeof(frag_h));
+	}
+
+	/* Create our context and encode our parities */
+	codec = wirehair_encoder_create(0, input, inbyte, size);
+	if(codec == NULL) {
+		bef_encode_free(data, parity, header.k, header.m);
+		return -BEF_ERR_WIREHAIR;
+	}
+
+	for(uint16_t i = 0; i < header.m; i++) {
+		frag_h.block_num = header.k + i;
+
+		res = wirehair_encode(codec, header.k + i,
+				      *(parity + i) + sizeof(frag_h), size,
+				      &(frag_h.nbyte));
+		if(res != Wirehair_Success) {
+			bef_encode_free(data, parity, header.k, header.m);
+			wirehair_free(codec);
+			return -BEF_ERR_WIREHAIR;
+		}
+
+		memcpy(*(parity + i), &frag_h, sizeof(frag_h));
+	}
+
+	wirehair_free(codec);
+	return 0;
+}
+#endif
+
 /* Reconstructs a given array of fragments with a bef_fec_header.
  *
  * flag has special behaviors depending on what it is set.
@@ -757,8 +834,8 @@ static int bef_encode_leopard(const char *input, size_t inbyte, char **data,
  *
  * Returns the number of fragments not found (and replaced with recoveries)
  */
-static uint16_t bef_decode_reconstruct(char **frags, char **recon_arr,
-				       uint32_t *block_nums,
+static uint16_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
+				       char **recon_arr, uint32_t *block_nums,
 				       uint16_t k, uint16_t m,
 				       uint8_t flag)
 {
@@ -771,7 +848,7 @@ static uint16_t bef_decode_reconstruct(char **frags, char **recon_arr,
 	if(flag & BEF_RECON_NULL)
 		bound = k + m;
 
-	for(uint16_t i = 0; i < bound; i++) {
+	for(uint32_t i = 0; i < frag_len; i++) {
 		memcpy(&header, *(frags + i), sizeof(header));
 
 		if(header.block_num != i + found && i + found < bound) {
@@ -805,7 +882,7 @@ static uint16_t bef_decode_reconstruct(char **frags, char **recon_arr,
 }
 
 #ifdef BEF_LIBERASURECODE
-static int bef_decode_liberasurecode(char **frags, uint16_t frag_len,
+static int bef_decode_liberasurecode(char **frags, uint32_t frag_len,
 				     size_t frag_b,
 				     char **output, size_t *onbyte,
 				     struct bef_real_header header)
@@ -842,7 +919,7 @@ static int bef_decode_liberasurecode(char **frags, uint16_t frag_len,
  * we need to reconstruct it in order of block number, replacing missing block
  * numbers with parities.
  */
-static int bef_decode_libfec(char **frags, uint16_t dummy, size_t frag_b,
+static int bef_decode_libfec(char **frags, uint32_t frag_len, size_t frag_b,
 			     char **output, size_t *onbyte,
 			     struct bef_real_header header)
 {
@@ -854,7 +931,7 @@ static int bef_decode_libfec(char **frags, uint16_t dummy, size_t frag_b,
 	size_t size = frag_b - sizeof(struct bef_fec_header);
 	*onbyte = size * header.k;
 
-	found = bef_decode_reconstruct(frags, recon_arr, block_nums,
+	found = bef_decode_reconstruct(frags, frag_len, recon_arr, block_nums,
 				       header.k, header.m, 0);
 	for(uint16_t i = 0; i < found; i++)
 		out_arr[i] = bef_malloc(size);
@@ -888,7 +965,7 @@ static int bef_decode_libfec(char **frags, uint16_t dummy, size_t frag_b,
  * its proper state. I should probably make a dedicated function to
  * reconstruction since it seems to pop up frequently...
  */
-static int bef_decode_cm256(char **frags, uint16_t dummy, size_t frag_b,
+static int bef_decode_cm256(char **frags, uint16_t frag_len, size_t frag_b,
 			    char **output, size_t *onbyte,
 			    struct bef_real_header header)
 {
@@ -901,8 +978,8 @@ static int bef_decode_cm256(char **frags, uint16_t dummy, size_t frag_b,
 	*onbyte = params.BlockBytes * header.k;
 	*output = bef_malloc(*onbyte);
 
-	bef_decode_reconstruct(frags, recon_arr, block_nums, header.k, header.m,
-			       0);
+	bef_decode_reconstruct(frags, frag_len, recon_arr, block_nums,
+			       header.k, header.m, 0);
 
 	for(uint16_t i = 0; i < header.k; i++) {
 		blocks[i].Block = recon_arr[i];
@@ -928,7 +1005,7 @@ static int bef_decode_cm256(char **frags, uint16_t dummy, size_t frag_b,
  * array. However, openfec wants each missing fragment to be NULL and to have as
  * many fragments as possible. So we try our best to provide that.
  */
-static int bef_decode_openfec(char **frags, uint16_t dummy, size_t frag_b,
+static int bef_decode_openfec(char **frags, uint32_t frag_len, size_t frag_b,
 			      char **output, size_t *onbyte,
 			      struct bef_real_header header)
 {
@@ -945,8 +1022,8 @@ static int bef_decode_openfec(char **frags, uint16_t dummy, size_t frag_b,
 	if(ret != 0)
 		return ret;
 
-	bef_decode_reconstruct(frags, recon_arr, block_nums, header.k, header.m,
-			       BEF_RECON_NULL);
+	bef_decode_reconstruct(frags, frag_len, recon_arr, block_nums,
+			       header.k, header.m, BEF_RECON_NULL);
 
 	oret = of_set_available_symbols(session, (void **) recon_arr);
 	if(oret != OF_STATUS_OK)
@@ -978,7 +1055,7 @@ static int bef_decode_openfec(char **frags, uint16_t dummy, size_t frag_b,
 #endif
 
 #ifdef BEF_LEOPARD
-static int bef_decode_leopard(char **frags, uint16_t dummy, size_t frag_b,
+static int bef_decode_leopard(char **frags, uint32_t frag_len, size_t frag_b,
 			      char **output, size_t *onbyte,
 			      struct bef_real_header header)
 {
@@ -1000,7 +1077,7 @@ static int bef_decode_leopard(char **frags, uint16_t dummy, size_t frag_b,
 	for(uint32_t i = 0; i < work_count; i++)
 		*(work_data + i) = bef_malloc(size);
 
-	bef_decode_reconstruct(frags, recon_arr, block_nums, header.k,
+	bef_decode_reconstruct(frags, frag_len, recon_arr, block_nums, header.k,
 			       header.m, BEF_RECON_NULL);
 
 	res = leo_decode(size, header.k, header.m, work_count,
@@ -1026,6 +1103,50 @@ static int bef_decode_leopard(char **frags, uint16_t dummy, size_t frag_b,
 	free(recon_arr);
 	free(block_nums);
 	return ret;
+}
+#endif
+
+#ifdef BEF_WIREHAIR
+/* Unlike some of the others, like Leopard, OpenFEC, CM256, and zfec, we don't
+ * actually need to reconstruct our array here. Instead, we just pass all the
+ * blocks we have into the decoder.
+ */
+static int bef_decode_wirehair(char **frags, uint32_t frag_len, size_t frag_b,
+			      char **output, size_t *onbyte,
+			      struct bef_real_header header)
+{
+	WirehairResult res = Wirehair_NeedMore;
+	WirehairCodec codec = NULL;
+	struct bef_fec_header frag_h;
+	size_t size = frag_b - sizeof(frag_h);
+	*onbyte = size * header.k;
+
+	codec = wirehair_decoder_create(0, *onbyte, size);
+	if(codec == NULL)
+		return -BEF_ERR_WIREHAIR;
+
+	for(uint32_t i = 0; i < frag_len && res == Wirehair_NeedMore; i++) {
+		memcpy(&frag_h, *(frags + i), sizeof(frag_h));
+
+		res = wirehair_decode(codec,frag_h.block_num,
+				      *(frags + i) + sizeof(frag_h),
+				      frag_h.nbyte);
+		if(res != Wirehair_Success && res != Wirehair_NeedMore) {
+			wirehair_free(codec);
+			return -BEF_ERR_WIREHAIR;
+		}
+	}
+
+	*output = bef_malloc(*onbyte);
+	res = wirehair_recover(codec, *output, *onbyte);
+	if(res != Wirehair_Success) {
+		bef_decode_free(*output);
+		wirehair_free(codec);
+		return -BEF_ERR_WIREHAIR;
+	}
+
+	wirehair_free(codec);
+	return 0;
 }
 #endif
 
@@ -1109,6 +1230,18 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 			ret = bef_leopard_init();
 		break;
 #endif
+#ifdef BEF_WIREHAIR
+	case BEF_PAR_W_FC:
+		if(flag == BEF_SPAR_ENCODE)
+			*pp = &bef_encode_wirehair;
+		else if(flag == BEF_SPAR_DECODE)
+			*pp = &bef_decode_wirehair;
+		else if(flag == BEF_SPAR_MAXFRA)
+			*max = 65535;
+		else if(flag == BEF_SPAR_INIT)
+			ret = bef_wirehair_init();
+		break;
+#endif
 	default:
 		ret = -BEF_ERR_INVALINPUT;
 		break;
@@ -1181,7 +1314,7 @@ int bef_decode_ecc(char **frags, uint16_t frag_len, size_t frag_b,
 		   struct bef_real_header header)
 {
 	int ret = 0;
-	int (*f)(char **, uint16_t, size_t, char **, size_t *,
+	int (*f)(char **, uint32_t, size_t, char **, size_t *,
 		 struct bef_real_header header) = NULL;
 
 	/* Not enough fragments */
@@ -1744,13 +1877,12 @@ static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
 }
 
 static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
-				     char ***buf_arr,
+				     char ***buf_arr, uint16_t *index,
 				     uint64_t *pbyte, size_t *ahead,
 				     uint64_t il_count, uint64_t sbyte,
 				     struct bef_real_header header)
 {
 	int ret;
-	uint16_t index[header.il_n];
 	uint16_t i;
 	uint8_t flag = BEF_SCAN_FORWARDS;
 	struct bef_frag_header frag_h;
@@ -1823,14 +1955,15 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	char *output;
 	size_t onbyte;
 	char ***buf_arr;
+	uint16_t index[header.il_n];
 	struct bef_frag_header frag_h;
 	uint64_t frag_b = header.nbyte - sizeof(frag_h);
 
 	bef_deconstruct_buffers(&buf_arr, header.k + header.m, frag_b,
 				header.il_n);
 
-	ret = bef_deconstruct_fragments(ibuf, ibuf_s, buf_arr, pbyte, ahead,
-					il_count, sbyte, header);
+	ret = bef_deconstruct_fragments(ibuf, ibuf_s, buf_arr, index,
+					pbyte, ahead, il_count, sbyte, header);
 	if(ret != 0)
 		goto out;
 
@@ -1845,7 +1978,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 		if(flag != 0)
 			continue; //Iterate until done
 
-		ret = bef_decode_ecc(*(buf_arr + i), header.k + header.m,
+		ret = bef_decode_ecc(*(buf_arr + i), index[i],
 				     frag_b, &output, &onbyte, header);
 #ifdef _OPENMP
 #pragma omp critical

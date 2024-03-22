@@ -12,7 +12,7 @@ fi
 
 dd if=test3.bef of=test3.bef.tmp bs=4K count=1024 status=none
 dd if=/dev/zero of=test3.bef.tmp bs=4K oseek=1024 count=1 status=none
-dd if=test3.bef bs=4M iseek=1 >> test3.bef.tmp
+dd if=test3.bef bs=4M iseek=1 status=none >> test3.bef.tmp
 
 if ! cmp test3 <(bef -d -i test3.bef.tmp)
 then

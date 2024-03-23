@@ -729,7 +729,7 @@ static int bef_encode_leopard(const char *input, size_t inbyte, char **data,
 		*(data + i) += sizeof(frag_h);
 	}
 	for(uint16_t i = 0; i < header.m; i++) {
-		frag_h.block_num = header.k + i;
+		frag_h.block_num = (uint32_t) header.k + i;
 		*(parity + i) = bef_malloc(size + sizeof(frag_h));
 
 		memcpy(*(parity + i), &frag_h, sizeof(frag_h));
@@ -1095,8 +1095,10 @@ static int bef_decode_leopard(char **frags, uint32_t frag_len, size_t frag_b,
 	uint32_t *block_nums;
 	uint64_t size = frag_b - sizeof(struct bef_fec_header);
 
-	recon_arr = bef_malloc((header.k + header.m) * sizeof(*recon_arr));
-	block_nums = bef_malloc((header.k + header.m) * sizeof(*block_nums));
+	recon_arr = bef_calloc(((uint32_t) header.k + header.m),
+			       sizeof(*recon_arr));
+	block_nums = bef_calloc(((uint32_t) header.k + header.m),
+				sizeof(*block_nums));
 	*onbyte = size * header.k;
 	*output = bef_malloc(*onbyte);
 	work_count = leo_decode_work_count(header.k, header.m);

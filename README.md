@@ -64,18 +64,25 @@ Only Linux is supported for now, it is not cross platform.
 There are also packages maintained by me at the AUR for those using Arch Linux.
 
 # Dependencies
-Mandatory dependencies to build this package are
+
+
+## Mandatory dependencies
 
 - [xxhash](https://github.com/Cyan4973/xxHash)
 
 There are some additional optional dependencies as well
 
+## Optional Hashing backend dependencies
 - [BLAKE3](https://github.com/BLAKE3-team/BLAKE3/tree/master/c) for BLAKE3
 - [OpenSSL](https://www.openssl.org) for SHA1, SHA256, SHA3, BLAKE2S, and MD5
 - [Zlib](https://github.com/madler/zlib) for CRC32
-- [liberasurecode](https://github.com/openstack/liberasurecode) for Jerasure, ISA-L, and its own native implementation of Reed solomon codes, support.
 
-Most of these are provided by distributions, except for liberasurecode and BLAKE3's C interface.
+## Optional Parity backend dependencies
+- [liberasurecode](https://github.com/openstack/liberasurecode) for Jerasure, ISA-L, and its own native implementation of Reed Solomon codes, support.
+- [cm256cc](https://github.com/f4exb/cm256cc) for their implementation of Reed Solomon codes.
+- [OpenFEC](https://github.com/OpenFEC/OpenFEC) for their implementation of Reed Solomon codes.
+- [Leopard](https://github.com/catid/leopard) for their extremely scalable O(nlogn) implementation of Reed Solomon codes.
+- [Wirehair](https://github.com/catid/wirehair) for their O(n) fountain code.
 
 # Comparison to other tools
 Please see [Comparison.md](Comparison.md) for a detailed comparison between this, zfec, par2cmdline, and par2cmdline-turbo.

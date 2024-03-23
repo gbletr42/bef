@@ -52,9 +52,9 @@ And as such _two_ fragments for block n were corrupted, when by default we only 
 
 $\frac{B(m-1+(N-1)m) + 2}{NB(k+m)}$
 
-As one can see, increasing any m or N will bring you closer to the limit of $\frac{m}{k+m}$, and increasing both m and k will lead to you being closer to that limit. Thus if one wants a greater assurance, they should increase m, N, or both.
+As one can see, increasing either m or N will bring you closer to the limit of $\frac{m}{k+m}$, and increasing both m and k will lead to you being closer to that limit if N is constant. Thus if one wants a greater assurance of data integrity, they should increase m, N, or both.
 
-This is a fundamental limitation in the format, so if you need maximal assurance your data will be safe with a giant burst of say a megabyte, I recommend using par2cmdline instead as it offers those assurances.
+This is a fundamental limitation in the format, so if you need maximal assurance your data will be safe with a giant burst of say a gigabyte, I recommend using par2cmdline instead as it offers those assurances.
 
 # What will it build on?
 I have built and tested it against x86-64 and x86, on Debian Bookworm and Alpine Linux 3.19, and the results are that it _seems_ to work on both architectures!

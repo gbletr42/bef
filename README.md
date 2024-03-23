@@ -2,7 +2,7 @@
 **This software package has not been extensively battle tested in the real world. While your data is *probably* safe, there may be data eating bugs hiding**
 
 # Description
-Block Erasure Format is a file utility and file format designed to fix the pain points I've personally had with existing utilities. It has a nice and easy to use interface, at least according to me, it is simple with minimal overhead, and it is very fast. It is also designed to be modular and extensible, with modular hash and parity library backends. The file format is fully streamable, meaning it does not need to have a seekable file to work, so you can just pipe data right in from say tar. It is finally a very small piece of software, only around 2 klocs, so it should be readily auditable and forkable.
+Block Erasure Format is a file utility and file format designed to fix the pain points I've personally had with existing utilities. It has a nice and easy to use interface, at least according to me, it is simple with minimal overhead, and it is very fast. It is also designed to be modular and extensible, with modular hash and parity library backends. The file format is fully streamable, meaning it does not need to have a seekable file to work, so you can just pipe data right in from say tar.
 
 # What even are erasure codes?
 Erasure codes are a type of error correction codes that can be applied to a set of k input symbols (such as k blocks of data) and output k+n output symbols. You can lose any n symbols from the output before you are unable to reconstruct the original input, providing you with significant protection against corruption.
@@ -48,12 +48,20 @@ Currently, by default each block is 64KiB in size, erasure coded with 15 data fr
 
 1 byte corrupts frag x of block n, 4096 bytes corrupts frag x of block n+1, 4096 bytes corrupts frag x of block n+2, 4096 bytes corrupts frag x of block n+3, 4096 bytes corrupts frag x of block n+4, 1 byte corrupts frag x+1 of block n.
 
-And as such _two_ fragments for block n were corrupted, when by default we only have 1 parity. The more fragments you interleave, the closer and closer you get to achieving a burst size equal to the total size of parities in the whole set of interleaved block fragments. This is a fundamental limitation in the format, so if you need maximal assurance your data will be safe with a giant burst of say a megabyte, I recommend using par2cmdline instead as it offers those assurances.
+And as such _two_ fragments for block n were corrupted, when by default we only have 1 parity. The more fragments you interleave, the closer and closer you get to achieving a burst size equal to the total size of parities in the whole set of interleaved block fragments. In addition, the more parity fragments you generate, the closer and closer you get to that limit. Specifically, you can approximate the burst size ratio using this mathematical formula, where B is the fragment size, m is the number of parity fragments, k is the number of data fragments, and N is the number of blocks interleaved. Fragment size can be approximated by the ratio $\frac{B}{k}$, where B is the block size and k is the number of data fragments. Parity fragments do not impact the fragment size.
+
+$\frac{B(m-1+(N-1)m) + 2}{NB(k+m)}$
+
+As one can see, increasing any m or N will bring you closer to the limit of $\frac{m}{k+m}$, and increasing both m and k will lead to you being closer to that limit. Thus if one wants a greater assurance, they should increase m, N, or both.
+
+This is a fundamental limitation in the format, so if you need maximal assurance your data will be safe with a giant burst of say a megabyte, I recommend using par2cmdline instead as it offers those assurances.
 
 # What will it build on?
 I have built and tested it against x86-64 and x86, on Debian Bookworm and Alpine Linux 3.19, and the results are that it _seems_ to work on both architectures!
 
 Only Linux is supported for now, it is not cross platform.
+
+There are also packages maintained by me at the AUR for those using Arch Linux.
 
 # Dependencies
 Mandatory dependencies to build this package are

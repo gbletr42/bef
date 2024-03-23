@@ -1,4 +1,4 @@
-.TH "bef" "1" "8 Mar 2024" "bef v0.04" "User Commands"
+.TH "bef" "1" "23 Mar 2024" "bef v0.2.3" "User Commands"
 .P
 .SH "NAME"
 bef \- An extensible, fast, and useable file utility to encode and decode erasure coded streams of data.
@@ -60,12 +60,12 @@ standard: A preset that mimics the Reed Solomon codes on a Compact Disc. Compact
 .IP
 share: A preset made for sharing over the internet. Since there are so many checksums and HMACS in the case of HTTPS, SSL, or other popular encrypted communications, it is highly unlikely significant amounts of corruption will effect you. So the preset has a 1% redundancy rate at k=100, m=1.
 .IP
-archive: A preset made for archiving the data long term. I'd imagine you'd want to lose a significant percentage of the archive and still come out okay. So the redundancy rate is 50% at k=16, m=8, this allows you to lose around 33% of the output and still be able to reconstruct the data faithfully. Likewise, the interleave number is set to 10 blocks, to get the worst case burst size to around 90% of the total size of parity per set of interleaved blocks.
+archive: A preset made for archiving the data long term. I'd imagine you'd want to lose a significant percentage of the archive and still come out okay. So the redundancy rate is 50% at k=16, m=8, this allows you to lose around 33% of the output and still be able to reconstruct the data faithfully. Likewise, the interleave number is set to 10 blocks, to get the burst size to ~98.75% of the total size of the parities in the set, or around ~320KiB per 1MiB.
 .IP
-paranoid: A preset made for paranoid archivers. Similar to archive, except it has 100% redundancy (k=16, m=16) and 20 interleaved blocks. This would allow you to corrupt half the output file on average (hopefully not in one burst!) and still be able to recover the original data. The 10 extra interleaved blocks makes the worst case burst size around 95% instead of the 90% in the archive preset, or the ~80% by default.
+paranoid: A preset made for paranoid archivers. Similar to archive, except it has 100% redundancy (k=16, m=16) and 20 interleaved blocks. This would allow you to corrupt half the output file on average (hopefully not in one burst!) and still be able to recover the original data. The 10 extra interleaved blocks makes the worst case burst size around 99.69% of the total size of the parities in the set, or around ~1.24MiB per 2.5MiB.
 .TP
 \fB\-r\fR, \fB\-\-raw\fR
-Enables the special raw mode, which has different behaviors depending on whether \fB\-\-construct\fR or \fB\-\-deconstruct\fR is used with it. If \fB\-\-construct\fR is used, it is functionally the same except is does not write the header to output. If \fB\-\-deconstruct\fR is used, it takes in the given values and doesn't try to read a header. In addition to enabling raw mode, it is necessary to give the fragment size too, such that we know how to read the given stream. Currently there is no user friendly way to get that detail.
+Enables the special raw mode, which has different behaviors depending on whether \fB\-\-construct\fR or \fB\-\-deconstruct\fR is used with it. If \fB\-\-construct\fR is used, it is functionally the same except is does not write the header to output. If \fB\-\-deconstruct\fR is used, it takes in the given values and doesn't try to read a header. In addition to enabling raw mode, it is necessary to give the fragment size too, such that we know how to read the given stream. Currently the easiest way to get this is to enable verbosity and give a random fragment size on construction, the command will fail and tell you what you should've given instead.
 .TP
 \fB\-b\fR, \fB\-\-bsize\fR
 Specifies the block size to be used in construction of a BEF file. The default block size is 65536 bytes.
@@ -77,26 +77,30 @@ The number of data fragments to split the block size into. The default number of
 The number of parity fragments to create in redundancy to the data fragments. The default number of parity fragments is 1.
 .TP
 \fB\-l\fR, \fB\-\-interleave\fR
-The number of blocks (specifically their fragments) to interleave. The default number is 5, as it makes the worst case burst size around 80% of the total parity size per set of interleaved blocks. The more blocks you interleave, the closer and closer the absolute worst case burst size becomes to the total size of your parity fragments per set of interleaved blocks.
+The number of blocks (specifically their fragments) to interleave. The default number is 5, as it makes the worst case burst size around 80% of the total parity size per set of interleaved blocks when m = 1. The more blocks you interleave, the closer and closer the absolute worst case burst size becomes to the total size of your parity fragments per set of interleaved blocks. Likewise, the more parity fragments you create, the closer and closer that burst size becomes to the total size of those parity fragments per set of interleaved blocks.
 .TP
 \fB\-P\fR, \fB\-\-parity-type\fR
-The specific parity backend type to use to compute the erasure codes. Options are below. Default is fec-vand, as it is fast in almost all cases and allows up to 256 fragments.
+The specific parity backend type to use to compute the erasure codes. Options are below. Default is fec-vand, as it is fast in almost all cases and allows up to 256 fragments. All mentions of scalability are in reference to the number of parity fragments created, not total.
 .IP
-jerasure-vand: The Vandermonde Reed Solomon implementation from libJerasure, provided by liberasurecode
+jerasure-vand: The Vandermonde Reed Solomon implementation from libJerasure, provided by liberasurecode. Reasonably fast, but single-threaded and scales poorly. Max number of fragments is 32.
 .IP
-jerasure-cauchy: The Cauchy Reed Solomon implementation from libJerasure, provided by liberasurecode
+jerasure-cauchy: The Cauchy Reed Solomon implementation from libJerasure, provided by liberasurecode. Reasonably fast, but single-threaded, scales poorly, and the max number of fragments is only 16.
 .IP
-liberasurecode-vand: The Vandermonde Reed Solomon implementation offered by liberasurecode, terribly slow and scales terribly in every way, don't use unless necessary
+liberasurecode-vand: The Vandermonde Reed Solomon implementation offered by liberasurecode, terribly slow and scales poorly. Max number of fragments is 32.
 .IP
-intel-vand: The Vandermonde Reed Solomon implementation offered by Intel's ISA-L, provided by liberasurecode.
+intel-vand: The Vandermonde Reed Solomon implementation offered by Intel's ISA-L, provided by liberasurecode. Very fast and scales reasonably well. Max number of fragments is 32.
 .IP
-intel-cauchy: The Cauchy Reed Solomon implementation offered by Intel's ISA-L, provided by liberasurecode
+intel-cauchy: The Cauchy Reed Solomon implementation offered by Intel's ISA-L, provided by liberasurecode. Very fast and scales reasonably well. Max number of fragments is 32.
 .IP
-fec-vand: The Vandermonde Reed Solomon implementation offered by zfec's modified libfec library. Extremely fast and scales well.
+fec-vand: The Vandermonde Reed Solomon implementation offered by zfec's modified libfec library. Extremely fast and scales well. Max number of fragments is 256.
 .IP
-cm256-cauchy: The Cauchy Reed Solomon implementation offered by cm256cc.
+cm256-cauchy: The Cauchy Reed Solomon implementation offered by cm256cc. Extremely fast and scales well, but not as well as fec-vand. Max number of fragments is 256.
 .IP
-openfec-vand: The Vandermonde Reed Solomon implementation offered by OpenFEC.
+openfec-vand: The Vandermonde Reed Solomon implementation offered by OpenFEC. Extremely fast, but single-threaded and scales poorly. Max number of fragments is 256.
+.IP
+leopard: The Reed Solomon implemented by Chris Taylor's Leopard. Uses a FFT instead of a Vandermonde Matrix, and is extremely fast and scales incredibly well. Max number of fragments is 65536, but k must be greater than or equal to m and likewise must be greater than or equal to two, or put simply, 2 <= k <= m, k + m <= 65536.
+.IP
+wirehair: The Fountain Code implemented by Chris Taylor's Wirehair. Reasonably fast (not as fast as Leopard or zfec) and scales scaringly well. This is the most scalable of all the parities currently offered, with the restriction that k <= 64000. Max number of fragments is 129535 (64000+65535).
 .TP
 \fB\-H\fR, \fB\-\-hash-type\fR
 The specific hash backend type to use to compute the fragment and header hashes. At this moment, the size of these hashes are at most 256 bits. The options are below, and the default is xxhash as it is exceptionally fast. If one desires cryptographic security against evil corruption, then the best recommendation is either BLAKE3 for a good compromise on speed or SHA256

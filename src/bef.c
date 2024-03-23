@@ -1258,7 +1258,7 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 		else if(flag == BEF_SPAR_DECODE)
 			*pp = &bef_decode_leopard;
 		else if(flag == BEF_SPAR_MAXFRA)
-			*max = 65535;
+			*max = 65536;
 		else if(flag == BEF_SPAR_INIT)
 			ret = bef_leopard_init();
 		break;

@@ -75,7 +75,8 @@
 #define BEF_SPAR_MAXFRA		2
 #define BEF_SPAR_INIT		4
 #define BEF_SPAR_DESTRO		5
-#define BEF_SPAR_MAXNUM		6
+#define BEF_SPAR_MULTIT		6
+#define BEF_SPAR_MAXNUM		7
 
 #define BEF_RECON_REPLACE	0
 #define BEF_RECON_NULL		1
@@ -1045,7 +1046,7 @@ static int bef_decode_openfec(char **frags, uint32_t frag_len, size_t frag_b,
 	size_t size = frag_b - sizeof(struct bef_fec_header);
 	*onbyte = size * header.k;
 
-	ret = bef_openfec_init(&session, header.k, header.m, frag_b);
+	ret = bef_openfec_init(&session, header.k, header.m, size);
 	if(ret != 0)
 		return ret;
 
@@ -1209,6 +1210,9 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 						      header->m);
 		} else if(flag == BEF_SPAR_DESTRO) {
 			ret = bef_liberasurecode_destroy();
+		} else if(flag == BEF_SPAR_MULTIT) {
+			if(par_t == BEF_PAR_J_V_RS || par_t == BEF_PAR_J_C_RS)
+				ret = 1;
 		}
 		break;
 #endif
@@ -1243,6 +1247,8 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 			*pp = &bef_decode_openfec;
 		else if(flag == BEF_SPAR_MAXFRA)
 			*max = 256;
+		else if(flag == BEF_SPAR_MULTIT)
+			ret = 1;
 		break;
 #endif
 #ifdef BEF_LEOPARD
@@ -1275,6 +1281,14 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 	}
 
 	return ret;
+}
+
+/* Function to detect whether a given parity type supports multithreading
+ * Returns 0 if it does
+ */
+static int bef_par_multi(bef_par_t par_t)
+{
+	return bef_sky_par(par_t, NULL, BEF_SPAR_MULTIT);
 }
 
 /* Function to initialize reusable global variables */
@@ -1515,7 +1529,7 @@ static int bef_construct_blocks(char *output, char ***blocks,
 	uint64_t block_num;
 
 #ifdef _OPENMP
-#pragma omp parallel for private(block_num, offset, ret)
+#pragma omp parallel for private(block_num, offset, ret) if(bef_par_multi(header.par_t) == 0)
 #endif
 	for(uint32_t i = 0; i < (uint32_t) header.k + header.m; i++) {
 		if(flag != 0)
@@ -1577,7 +1591,7 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 		omp_set_num_threads(MIN(omp_get_num_procs(), header.il_n));
 	else
 		omp_set_num_threads(bef_numT);
-#pragma omp parallel for private(ret, frags, tmp_len)
+#pragma omp parallel for private(ret, frags, tmp_len) if(bef_par_multi(header.par_t) == 0)
 #endif
 	for(uint16_t i = 0; i < header.il_n; i++) {
 		if(flag != 0)
@@ -2004,7 +2018,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 		omp_set_num_threads(MIN(omp_get_num_procs(), header.il_n));
 	else
 		omp_set_num_threads(bef_numT);
-#pragma omp parallel for private(output, onbyte, ret)
+#pragma omp parallel for private(output, onbyte, ret) if(bef_par_multi(header.par_t) == 0)
 #endif
 	for(uint16_t i = 0; i < header.il_n; i++) {
 		if(flag != 0)

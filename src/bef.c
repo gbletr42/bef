@@ -329,6 +329,12 @@ static void bef_prepare_frag_header(struct bef_frag_header *header)
 	header->pbyte = htole64(header->pbyte);
 }
 
+static void bef_prepare_fec_header(struct bef_fec_header *header)
+{
+	header->block_num = htole64(header->block_num);
+	header->nbyte = htole64(header->nbyte);
+}
+
 static void bef_unprepare_header(struct bef_real_header *header)
 {
 	header->flags = le64toh(header->flags);
@@ -342,6 +348,12 @@ static void bef_unprepare_frag_header(struct bef_frag_header *header)
 {
 	header->block_num = le64toh(header->block_num);
 	header->pbyte = le64toh(header->pbyte);
+}
+
+static void bef_unprepare_fec_header(struct bef_fec_header *header)
+{
+	header->block_num = le64toh(header->block_num);
+	header->nbyte = le64toh(header->nbyte);
 }
 
 #ifdef BEF_ZLIB
@@ -550,6 +562,7 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 	for(int i = 0; i < header.k; i++) {
 		*(data + i) = bef_malloc(size + sizeof(frag_h));
 		frag_h.block_num = i;
+		bef_prepare_fec_header(&frag_h);
 
 		memcpy(*(data + i), &frag_h, sizeof(frag_h));
 		memcpy(*(data + i) + sizeof(frag_h), input + i * size, size);
@@ -560,6 +573,7 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 		*(parity + i) = bef_malloc(size + sizeof(frag_h));
 		block_nums[i] = header.k + i;
 		frag_h.block_num = header.k + i;
+		bef_prepare_fec_header(&frag_h);
 		memcpy(*(parity + i), &frag_h, sizeof(frag_h));
 		*(parity + i) += sizeof(frag_h); //Evil and Satanic
 	}
@@ -598,6 +612,7 @@ static int bef_encode_cm256(const char *input, size_t inbyte, char **data,
 	/* Allocate our arrays */
 	for(uint16_t i = 0; i < header.k; i++) {
 		frag_h.block_num = i;
+		bef_prepare_fec_header(&frag_h);
 		*(data + i) = bef_malloc(params.BlockBytes + sizeof(frag_h));
 
 		memcpy(*(data + i), &frag_h, sizeof(frag_h));
@@ -606,6 +621,7 @@ static int bef_encode_cm256(const char *input, size_t inbyte, char **data,
 	}
 	for(uint16_t i = 0; i < header.m; i++) {
 		frag_h.block_num = header.k + i;
+		bef_prepare_fec_header(&frag_h);
 		*(parity + i) = bef_malloc(params.BlockBytes + sizeof(frag_h));
 
 		memcpy(*(parity + i), &frag_h, sizeof(frag_h));
@@ -663,6 +679,7 @@ static int bef_encode_openfec(const char *input, size_t inbyte, char **data,
 	 */
 	for(uint16_t i = 0; i < header.k; i++) {
 		frag_h.block_num = i;
+		bef_prepare_fec_header(&frag_h);
 		*(data + i) = bef_malloc(sizeof(frag_h) + size);
 		memcpy(*(data + i), &frag_h, sizeof(frag_h));
 		memcpy(*(data + i) + sizeof(frag_h), input + i * size, size);
@@ -670,6 +687,7 @@ static int bef_encode_openfec(const char *input, size_t inbyte, char **data,
 	}
 	for(uint16_t i = 0; i < header.m && flag == 0; i++) {
 		frag_h.block_num = header.k + i;
+		bef_prepare_fec_header(&frag_h);
 		*(parity + i) = bef_malloc(sizeof(frag_h) + size);
 		memcpy(*(parity + i), &frag_h, sizeof(frag_h));
 		symbol_tbl[header.k + i] = *(parity + i) + sizeof(frag_h);
@@ -722,6 +740,7 @@ static int bef_encode_leopard(const char *input, size_t inbyte, char **data,
 	 */
 	for(uint16_t i = 0; i < header.k; i++) {
 		frag_h.block_num = i;
+		bef_prepare_fec_header(&frag_h);
 		*(data + i) = bef_malloc(size + sizeof(frag_h));
 
 		memcpy(*(data + i), &frag_h, sizeof(frag_h));
@@ -730,6 +749,7 @@ static int bef_encode_leopard(const char *input, size_t inbyte, char **data,
 	}
 	for(uint16_t i = 0; i < header.m; i++) {
 		frag_h.block_num = (uint32_t) header.k + i;
+		bef_prepare_fec_header(&frag_h);
 		*(parity + i) = bef_malloc(size + sizeof(frag_h));
 
 		memcpy(*(parity + i), &frag_h, sizeof(frag_h));
@@ -785,6 +805,7 @@ static int bef_encode_wirehair(const char *input, size_t inbyte, char **data,
 	for(uint16_t i = 0; i < header.k; i++) {
 		frag_h.block_num = i;
 		frag_h.nbyte = size;
+		bef_prepare_fec_header(&frag_h);
 		*(data + i) = bef_malloc(size + sizeof(frag_h));
 
 		memcpy(*(data + i), &frag_h, sizeof(frag_h));
@@ -814,6 +835,7 @@ static int bef_encode_wirehair(const char *input, size_t inbyte, char **data,
 			return -BEF_ERR_WIREHAIR;
 		}
 
+		bef_prepare_fec_header(&frag_h);
 		memcpy(*(parity + i), &frag_h, sizeof(frag_h));
 	}
 
@@ -850,6 +872,7 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 
 	for(uint32_t i = 0; i + found < k + m;) {
 		memcpy(&header, *(frags + i), sizeof(header));
+		bef_unprepare_fec_header(&header);
 
 		if(header.block_num != i + found) {
 			if(i + found < bound) {
@@ -1157,6 +1180,7 @@ static int bef_decode_wirehair(char **frags, uint32_t frag_len, size_t frag_b,
 
 	for(uint32_t i = 0; i < frag_len && res == Wirehair_NeedMore; i++) {
 		memcpy(&frag_h, *(frags + i), sizeof(frag_h));
+		bef_unprepare_fec_header(&frag_h);
 
 		res = wirehair_decode(codec,frag_h.block_num,
 				      *(frags + i) + sizeof(frag_h),

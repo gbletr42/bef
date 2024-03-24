@@ -24,9 +24,7 @@
 #include <string.h>
 #include <assert.h>
 
-#if defined __SSE3__
 #include <immintrin.h>
-#endif
 
 /*
  * Primitive polynomials - see Lin & Costello, Appendix A,
@@ -178,12 +176,13 @@ generate_gf (void) {
  * Modified AVX2 version does the same, but with duplicated halves for double
  * the throughput
  */
-#if defined __AVX2__
-#define SIZE 32
+#ifdef __x86_64__
+#define AVX_SIZE 32
+__attribute__((__target__("avx2")))
 static void
-_addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz) {
+_addmul1_avx2(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz) {
     register gf *gf_mulc = gf_mul_table[c];
-    const gf* lim = &dst[sz - SIZE + 1];
+    const gf* lim = &dst[sz - AVX_SIZE + 1];
     __m256i dst_mm, src_mm, t1_mm, t2_mm, mask1, mask2, l, h;
     t1_mm = _mm256_setr_epi8(gf_mulc[0x00], gf_mulc[0x01],
 			     gf_mulc[0x02], gf_mulc[0x03],
@@ -220,7 +219,7 @@ _addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t 
     mask1 = _mm256_set1_epi8(0x0F);
     mask2 = _mm256_set1_epi8(0xF0);
 
-    for (; dst < lim; dst += SIZE, src += SIZE) {
+    for (; dst < lim; dst += AVX_SIZE, src += AVX_SIZE) {
         src_mm = _mm256_loadu_si256((__m256i *) src);
 	l = _mm256_and_si256(src_mm, mask1);
 	l = _mm256_shuffle_epi8(t1_mm, l);
@@ -234,16 +233,17 @@ _addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t 
 	_mm256_storeu_si256((__m256i *) dst, dst_mm);
     }
 
-    lim += SIZE - 1;
+    lim += AVX_SIZE - 1;
     for (; dst < lim; dst++, src++)       /* final components */
         *dst ^= gf_mulc[*src];
 }
-#elif defined __SSE3__
-#define SIZE 16
+
+#define SSE_SIZE 16
+__attribute__((__target__("ssse3")))
 static void
-_addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz) {
+_addmul1_sse3(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz) {
     register gf *gf_mulc = gf_mul_table[c];
-    const gf* lim = &dst[sz - SIZE + 1];
+    const gf* lim = &dst[sz - SSE_SIZE + 1];
     __m128i dst_mm, src_mm, t1_mm, t2_mm, mask1, mask2, l, h;
     t1_mm = _mm_setr_epi8(gf_mulc[0x00], gf_mulc[0x01],
 			  gf_mulc[0x02], gf_mulc[0x03],
@@ -264,7 +264,7 @@ _addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t 
     mask1 = _mm_set1_epi8(0x0F);
     mask2 = _mm_set1_epi8(0xF0);
 
-    for (; dst < lim; dst += SIZE, src += SIZE) {
+    for (; dst < lim; dst += SSE_SIZE, src += SSE_SIZE) {
         src_mm = _mm_loadu_si128((__m128i *) src);
 	l = _mm_and_si128(src_mm, mask1);
 	l = _mm_shuffle_epi8(t1_mm, l);
@@ -278,14 +278,15 @@ _addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t 
 	_mm_storeu_si128((__m128i *) dst, dst_mm);
     }
 
-    lim += SIZE - 1;
+    lim += SSE_SIZE - 1;
     for (; dst < lim; dst++, src++)       /* final components */
         *dst ^= gf_mulc[*src];
 }
-#else
+#endif
+
 #define UNROLL 8
 static void
-_addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz) {
+_addmul1_generic(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz){
     register gf *gf_mulc = gf_mul_table[c];
     const gf* lim = &dst[sz - UNROLL + 1];
 
@@ -303,8 +304,18 @@ _addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t 
     for (; dst < lim; dst++, src++)       /* final components */
         *dst ^= gf_mulc[*src];
 }
-#endif
 
+static void
+_addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz){
+#ifdef __x86_64__
+	if(__builtin_cpu_supports("avx2"))
+		_addmul1_avx2(dst, src, c, sz);
+	else if(__builtin_cpu_supports("sse3"))
+		_addmul1_sse3(dst, src, c, sz);
+	else
+#endif
+		_addmul1_generic(dst, src, c, sz);
+}
 /*
  * computes C = AB where A is n*k, B is k*m, C is n*m
  */

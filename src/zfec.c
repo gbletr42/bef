@@ -180,7 +180,7 @@ generate_gf (void) {
 #define AVX_SIZE 32
 __attribute__((__target__("avx2")))
 static void
-_addmul1_avx2(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz) {
+_addmul1_avx2(register gf*restrict dst, register const gf*restrict src, gf c, size_t sz) {
     register gf *gf_mulc = gf_mul_table[c];
     const gf* lim = &dst[sz - AVX_SIZE + 1];
     __m256i dst_mm, src_mm, t1_mm, t2_mm, mask1, mask2, l, h;
@@ -241,7 +241,7 @@ _addmul1_avx2(register gf*restrict dst, const register gf*restrict src, gf c, si
 #define SSE_SIZE 16
 __attribute__((__target__("ssse3")))
 static void
-_addmul1_sse3(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz) {
+_addmul1_sse3(register gf*restrict dst, register const gf*restrict src, gf c, size_t sz) {
     register gf *gf_mulc = gf_mul_table[c];
     const gf* lim = &dst[sz - SSE_SIZE + 1];
     __m128i dst_mm, src_mm, t1_mm, t2_mm, mask1, mask2, l, h;
@@ -286,7 +286,7 @@ _addmul1_sse3(register gf*restrict dst, const register gf*restrict src, gf c, si
 
 #define UNROLL 8
 static void
-_addmul1_generic(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz){
+_addmul1_generic(register gf*restrict dst, register const gf*restrict src, gf c, size_t sz){
     register gf *gf_mulc = gf_mul_table[c];
     const gf* lim = &dst[sz - UNROLL + 1];
 
@@ -306,7 +306,7 @@ _addmul1_generic(register gf*restrict dst, const register gf*restrict src, gf c,
 }
 
 static void
-_addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t sz){
+_addmul1(register gf*restrict dst, register const gf*restrict src, gf c, size_t sz){
 #ifdef __x86_64__
 	if(__builtin_cpu_supports("avx2"))
 		_addmul1_avx2(dst, src, c, sz);

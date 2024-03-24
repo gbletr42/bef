@@ -50,7 +50,7 @@ Currently, by default each block is 64KiB in size, erasure coded with 15 data fr
 
 And as such _two_ fragments for block n were corrupted, when by default we only have 1 parity. The more fragments you interleave, the closer and closer you get to achieving a burst size equal to the total size of parities in the whole set of interleaved block fragments. In addition, the more parity fragments you generate, the closer and closer you get to that limit. Specifically, you can approximate the burst size ratio using this mathematical formula, where B is the fragment size, m is the number of parity fragments, k is the number of data fragments, and N is the number of blocks interleaved. Fragment size can be approximated by the ratio $\frac{B}{k}$, where B is the block size and k is the number of data fragments. Parity fragments do not impact the fragment size.
 
-$\frac{B(m-1+(N-1)m) + 2}{NB(k+m)}$
+$\frac{B(m-1+(N-1)m) + 2}{NB(k+m)} = \frac{NBm-B+2}{NB(k+m)}$
 
 As one can see, increasing either m or N will bring you closer to the limit of $\frac{m}{k+m}$, and increasing both m and k will lead to you being closer to that limit if N is constant. Thus if one wants a greater assurance of data integrity, they should increase m, N, or both.
 

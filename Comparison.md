@@ -60,4 +60,4 @@ As one can see, my tool, for almost every backend available, is significantly fa
 
 Another thing to note is that on prior benchmarks par2 performed much worse, as they were conducted on a rather poor laptop. It is likely that since par2cmdline\[turbo\] uses as much CPU as possible and is rather intensive on the machine, the laptop throttled itself due to overheating and memory bandwidth issues due to too much load.
 # Conclusions
-My conclusions from these benchmarks is that if you want a fast and capable erasure coding tool and are fine with the inherent limitations in the format, pick my tool. Otherwise, if you want maximal protection at the cost of speed/streamability, pick par2cmdline-turbo. Stay away from both
+My conclusions from these benchmarks is that if you want a fast and capable erasure coding tool and are fine with the inherent limitations in the format, pick my tool. Otherwise, if you want maximal protection at the cost of speed/streamability, pick par2cmdline-turbo. Stay away from both par2cmdline and zfec, the first is terribly slow and the second doesn't check for integrity while also being rather inflexible.

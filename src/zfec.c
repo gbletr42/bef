@@ -310,7 +310,7 @@ _addmul1(register gf*restrict dst, const register gf*restrict src, gf c, size_t 
 #ifdef __x86_64__
 	if(__builtin_cpu_supports("avx2"))
 		_addmul1_avx2(dst, src, c, sz);
-	else if(__builtin_cpu_supports("sse3"))
+	else if(__builtin_cpu_supports("ssse3"))
 		_addmul1_sse3(dst, src, c, sz);
 	else
 #endif

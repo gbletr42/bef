@@ -19,17 +19,21 @@ zfec version: 1.5.7.4
 par2cmdline version: 0.8.1  
 par2cmdline-turbo version: 1.1.1
 
-bef encode: bef -P $parity -b \$((4\*\$k))K  -k \$k -m \$m -c -i test -o test.bef
-bef corruption: for((i = 1; i < 1024; i++)); do dd if=/dev/urandom of=test.bef bs=4K count=1 conv=notrunc oseek=\$((\$i\*250)) ; done
+Details below in code block so as to not mess up formatting
+
+```
+bef encode: bef -P $parity -b $((4*$k))K  -k $k -m $m -c -i test -o test.bef
+bef corruption: for((i = 1; i < 1024; i++)); do dd if=/dev/urandom of=test.bef bs=4K count=1 conv=notrunc oseek=$(($i*250)) ; done
 bef decode: bef -d -i test.bef -o test2
 
-zfec encode: zfec -f -m \$((\$k+\$m)) -k \$k test  
-zfec corruption: rm test.0\_5.fec  
-zfec decode: zunfec -f \*.fec -o test2  
+zfec encode: zfec -f -m $(($k+$m)) -k $k test  
+zfec corruption: rm test.0_5.fec  
+zfec decode: zunfec -f *.fec -o test2  
 
-par2cmdline[-turbo] encode: par2 c -b\$k -n1 -u -r25 test && rm \*.par2
-par2cmdline[-turbo] corruption: par2 c -b\$k -n1 -u -r25 test && dd if=/dev/urandom of=test bs=4K count=1 conv=notrunc  
+par2cmdline[-turbo] encode: par2 c -b$k -n1 -u -r25 test && rm *.par2
+par2cmdline[-turbo] corruption: par2 c -b$k -n1 -u -r25 test && dd if=/dev/urandom of=test bs=4K count=1 conv=notrunc  
 par2cmdline[-turbo] decode: par2 r test && mv test.1 test
+```
 
 |backend/tool|k=4 m=1 encode|k=4 m=1 decode|k=48 m=12 encode|k=48 m=12 decode|k=2000 m=500 encode|k=2000 m=500 decode|
 |-|-|-|-|-|-|-|

@@ -31,9 +31,13 @@ zfec corruption: rm test.0_5.fec
 zfec decode: zunfec -f *.fec -o test2  
 
 par2cmdline[-turbo] encode: par2 c -b$k -n1 -u -r25 test && rm *.par2
-par2cmdline[-turbo] corruption: par2 c -b$k -n1 -u -r25 test && dd if=/dev/urandom of=test bs=4K count=1 conv=notrunc  
+par2cmdline[-turbo] corruption: par2 c -b$k -n1 -u -r25 test && dd if=/dev/urandom of=test bs=4M count=1 conv=notrunc  
 par2cmdline[-turbo] decode: par2 r test && mv test.1 test
 ```
+
+A graph for the graphically minded (that big table can cause dyslexia)
+
+![Benchmark Bar Graph](benchmark.png)
 
 |backend/tool|k=4 m=1 encode|k=4 m=1 decode|k=48 m=12 encode|k=48 m=12 decode|k=2000 m=500 encode|k=2000 m=500 decode|
 |-|-|-|-|-|-|-|

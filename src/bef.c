@@ -1708,7 +1708,7 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 {
 	int ret;
 	int flag = 0;
-	uint8_t block_stat[header.il_n];
+	uint8_t *block_stat = bef_malloc(header.il_n);
 	char ***blocks;
 	char **frags;
 	size_t frag_len = 0;
@@ -1774,6 +1774,7 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s, char *obuf,
 	}
 
 	bef_construct_free(blocks, header.il_n);
+	free(block_stat);
 	return ret;
 }
 
@@ -2138,13 +2139,14 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	char *output;
 	size_t onbyte;
 	char ***buf_arr;
-	uint32_t index[header.il_n];
+	uint32_t *index = bef_malloc(header.il_n * sizeof(*index));
 	struct bef_frag_header frag_h;
 	uint64_t frag_b = header.nbyte - sizeof(frag_h);
 
 	if(frag_b > header.nbyte) {
 		if(bef_vflag)
 			fprintf(stderr, "ERROR: fragment byte size overflow\n");
+		free(index);
 		return -BEF_ERR_OVERFLOW;
 	}
 
@@ -2195,6 +2197,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	if(flag != 0)
 		ret = flag;
 out:
+	free(index);
 	bef_deconstruct_free(buf_arr, (uint32_t) header.k + header.m,
 			     header.il_n);
 	return ret;

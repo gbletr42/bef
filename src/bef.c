@@ -438,24 +438,33 @@ static int bef_digest_openssl(const char *input, uint8_t *output, size_t nbyte,
 	unsigned char digest[BEF_HASH_SIZE];
 
 	if(mdctx == NULL) {
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: OpenSSL MD Context failed\n");
 		ret = -BEF_ERR_NULLPTR;
 		goto out;
 	}
 
 	ret = EVP_DigestInit_ex(mdctx, (*f_evp)(), NULL);
 	if(ret != 1) {
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: OpenSSL Digest Init failed\n");
 		ret = -BEF_ERR_OPENSSL;
 		goto out;
 	}
 
 	ret = EVP_DigestUpdate(mdctx, (const unsigned char *) input, nbyte);
 	if(ret != 1) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: OpenSSL Digest Update failed\n");
 		ret = -BEF_ERR_OPENSSL;
 		goto out;
 	}
 
 	ret = EVP_DigestFinal_ex(mdctx, digest, &digest_len);
 	if(ret != 1) {
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: OpenSSL Digest Final failed\n");
 		ret = -BEF_ERR_OPENSSL;
 		goto out;
 	}
@@ -541,6 +550,8 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 		ret = bef_digest_xxhash(input, nbyte, output);
 		break;
 	default:
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: Invalid Hash Type\n");
 		ret = -BEF_ERR_INVALINPUT;
 		break;
 	}
@@ -681,6 +692,8 @@ static int bef_encode_cm256(const char *input, size_t inbyte, char **data,
 	ret = bef_cm256_encode(params, iblock, block_buf);
 	if(ret != 0) {
 		bef_encode_free(data, parity, header.k, header.m);
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: CM256 encode failed\n");
 		ret = -BEF_ERR_CM256;
 		goto out;
 	}
@@ -1232,6 +1245,8 @@ static int bef_decode_leopard(char **frags, uint32_t frag_len, size_t frag_b,
 		}
 	} else {
 		bef_decode_free(*output);
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: Leopard Decode failed\n");
 		ret = -BEF_ERR_LEOPARD;
 	}
 
@@ -1402,6 +1417,8 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 		break;
 #endif
 	default:
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: Invalid Parity Type\n");
 		ret = -BEF_ERR_INVALINPUT;
 		break;
 	}

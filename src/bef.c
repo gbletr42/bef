@@ -161,16 +161,28 @@ static int bef_liberasurecode_init(bef_par_t par_t, uint16_t k, uint16_t m)
 
 	if(bef_desc == -1) {
 		backend_id = bef_liberasurecode_par_switch(par_t);
-		if(backend_id == EC_BACKENDS_MAX)
+		if(backend_id == EC_BACKENDS_MAX) {
+			if(bef_vflag)
+				fprintf(stderr,
+					"ERROR: Invalid liberasurecode backend\n");
 			return -BEF_ERR_INVALINPUT;
+		}
 
 		ret = liberasurecode_backend_available(backend_id);
-		if(ret < 0)
+		if(ret < 0) {
+			if(bef_vflag)
+				fprintf(stderr,
+					"ERROR: liberasurecode backend not available\n");
 			return -ret;
+		}
 
 		bef_desc = liberasurecode_instance_create(backend_id, &args);
-		if(bef_desc < 0)
+		if(bef_desc < 0) {
+			if(bef_vflag)
+				fprintf(stderr,
+					"ERROR: liberasurecode instance creation failed\n");
 			return -bef_desc;
+		}
 	}
 
 	return 0;
@@ -194,12 +206,20 @@ static int bef_openfec_init(of_session_t **session, uint16_t k, uint16_t m,
 	ret = of_create_codec_instance(session,
 				       OF_CODEC_REED_SOLOMON_GF_2_8_STABLE,
 				       OF_ENCODER_AND_DECODER, 0);
-	if(ret != OF_STATUS_OK)
+	if(ret != OF_STATUS_OK) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: openfec codec creation failed\n");
 		return -BEF_ERR_OPENFEC;
+	}
 
 	ret = of_set_fec_parameters(*session, &params);
-	if(ret != OF_STATUS_OK)
+	if(ret != OF_STATUS_OK) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: openfec parameter setting failed\n");
 		return -BEF_ERR_OPENFEC;
+	}
 	else
 		return 0;
 }
@@ -208,8 +228,12 @@ static int bef_openfec_init(of_session_t **session, uint16_t k, uint16_t m,
 #ifdef BEF_LEOPARD
 static int bef_leopard_init(void)
 {
-	if(leo_init() != 0)
+	if(leo_init() != 0) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: leopard library initialization failed\n");
 		return -BEF_ERR_LEOPARD;
+	}
 	return 0;
 }
 #endif
@@ -217,8 +241,12 @@ static int bef_leopard_init(void)
 #ifdef BEF_WIREHAIR
 static int bef_wirehair_init(void)
 {
-	if(wirehair_init() != 0)
+	if(wirehair_init() != 0) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: wirehair library initialization failed\n");
 		return -BEF_ERR_WIREHAIR;
+	}
 	return 0;
 }
 #endif
@@ -229,10 +257,14 @@ static int bef_liberasurecode_destroy(void)
 	int ret;
 
 	ret = liberasurecode_instance_destroy(bef_desc);
-	if(ret < 0)
+	if(ret < 0) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: liberasurecode instance destruction failed\n");
 		return -ret;
-	else
+	} else {
 		return 0;
+	}
 }
 #endif
 
@@ -300,15 +332,22 @@ static ssize_t bef_safe_rw(int fd, char *buf, size_t nbyte, uint8_t flag)
 		}
 
 		if(ret > 0) {
-			if(SSIZE_MAX - offset > ret) //to check for overflow
+			if(SSIZE_MAX - offset > ret) { //to check for overflow
 				offset += ret;
-			else
+			} else {
+				if(bef_vflag)
+					fprintf(stderr,
+						"ERROR: read/write overflowed\n");
 				return -1;
+			}
 		}
 	}
 
-	if(ret == -1)
+	if(ret == -1) {
+		if(bef_vflag)
+			perror("ERROR: read/write failed");
 		offset = -1; //If erred with -1, it'll still return -1
+	}
 
 	return offset;
 }
@@ -363,12 +402,15 @@ static int bef_digest_crc32(const char *input, size_t nbyte, uint8_t *output)
 	crc = crc32(crc, (const Bytef *) input, (uInt) nbyte);
 
 	/* Check sizes and convert endianness */
-	if(sizeof(crc) == sizeof(uint32_t))
+	if(sizeof(crc) == sizeof(uint32_t)) {
 		crc = (uLong) htole32((uint32_t) crc);
-	else if (sizeof(crc) == sizeof(uint64_t))
+	} else if (sizeof(crc) == sizeof(uint64_t)) {
 		crc = (uLong) htole64((uint64_t) crc);
-	else
+	} else {
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: Invalid CRC32 size\n");
 		return -BEF_ERR_INVALSIZE;
+	}
 
 	memcpy(output, &crc, sizeof(crc)); //depends on platforms, 4 or 8 bytes
 	return 0;
@@ -518,8 +560,11 @@ static int bef_encode_liberasurecode(const char *input, size_t inbyte,
 
 	ret = liberasurecode_encode(bef_desc, input, inbyte, &tmp_data, &tmp_parity,
 				    (uint64_t *) frag_len);
-	if(ret < 0)
+	if(ret < 0) {
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: liberasurecode encoding failed\n");
 		return -ret;
+	}
 
 	/* Copy over the results */
 	for(int i = 0; i < header.k; i++) {
@@ -702,6 +747,8 @@ static int bef_encode_openfec(const char *input, size_t inbyte, char **data,
 
 	if(flag != 0) {
 		bef_encode_free(data, parity, header.k, flag);
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: openfec encode failed\n");
 		return -BEF_ERR_OPENFEC;
 	} else {
 		return 0;
@@ -729,8 +776,13 @@ static int bef_encode_leopard(const char *input, size_t inbyte, char **data,
 	*frag_len = size + sizeof(frag_h);
 
 	/* Leopard only works when m <= k */
-	if(header.m > header.k)
+	if(header.m > header.k) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: Leopard Parity Backend used and m (%u) is greater than k (%u)\n",
+				header.m, header.k);
 		return -BEF_ERR_INVALINPUT;
+	}
 
 	work_count = leo_encode_work_count(header.k, header.m);
 	work_data = bef_malloc(work_count * sizeof(*work_data));
@@ -776,6 +828,8 @@ static int bef_encode_leopard(const char *input, size_t inbyte, char **data,
 
 	if(res != Leopard_Success) {
 		bef_encode_free(data, parity, header.k, header.m);
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: Leopard encoding failed\n");
 		return -BEF_ERR_LEOPARD;
 	} else {
 		return 0;
@@ -798,8 +852,16 @@ static int bef_encode_wirehair(const char *input, size_t inbyte, char **data,
 	struct bef_fec_header frag_h = {0};
 	*frag_len = size + sizeof(frag_h);
 
-	if(size > UINT32_MAX || (header.k > 64000 || header.k < 2))
+	if(size > UINT32_MAX || (header.k > 64000 || header.k < 2)) {
+		if(bef_vflag && size > UINT32_MAX)
+			fprintf(stderr,
+				"ERROR: Wirehair Fragment Size greater than 4GiB (UINT32_MAX)\n");
+		else if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: Wirehair k value (%d) is invalid\n",
+				header.k);
 		return -BEF_ERR_INVALINPUT;
+	}
 
 	/* Allocate our arrays */
 	for(uint16_t i = 0; i < header.k; i++) {
@@ -820,6 +882,9 @@ static int bef_encode_wirehair(const char *input, size_t inbyte, char **data,
 	codec = wirehair_encoder_create(0, input, inbyte, size);
 	if(codec == NULL) {
 		bef_encode_free(data, parity, header.k, header.m);
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: Wirehair encoder creation failed\n");
 		return -BEF_ERR_WIREHAIR;
 	}
 
@@ -832,6 +897,9 @@ static int bef_encode_wirehair(const char *input, size_t inbyte, char **data,
 		if(res != Wirehair_Success) {
 			bef_encode_free(data, parity, header.k, header.m);
 			wirehair_free(codec);
+			if(bef_vflag)
+				fprintf(stderr,
+					"ERROR: Wirehair encode failed\n");
 			return -BEF_ERR_WIREHAIR;
 		}
 
@@ -941,8 +1009,12 @@ static int bef_decode_liberasurecode(char **frags, uint32_t frag_len,
 	ret = liberasurecode_decode(bef_desc, frags, (int) frag_len,
 				    (uint64_t) frag_b, 0, &tmp_output,
 				    &tmp_len);
-	if(ret < 0)
+	if(ret < 0) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: liberasurecode decode failed\n");
 		return -ret;
+	}
 
 	/* Copy over our data */
 	*output = bef_malloc((size_t) tmp_len);
@@ -1040,6 +1112,8 @@ static int bef_decode_cm256(char **frags, uint32_t dummy, size_t frag_b,
 	ret = bef_cm256_decode(params, blocks);
 	if(ret != 0) {
 		bef_decode_free(*output);
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: CM256 decode failed\n");
 		return -BEF_ERR_CM256;
 	}
 
@@ -1077,16 +1151,28 @@ static int bef_decode_openfec(char **frags, uint32_t frag_len, size_t frag_b,
 			       (uint32_t) header.k, header.m, BEF_RECON_NULL);
 
 	oret = of_set_available_symbols(session, (void **) recon_arr);
-	if(oret != OF_STATUS_OK)
+	if(oret != OF_STATUS_OK) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: openfec decode step 1 (setting input data) failed\n");
 		return -BEF_ERR_OPENFEC;
+	}
 
 	oret = of_finish_decoding(session);
-	if(oret != OF_STATUS_OK)
+	if(oret != OF_STATUS_OK) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: openfec decode step 2 (decoding) failed\n");
 		return -BEF_ERR_OPENFEC;
+	}
 
 	oret = of_get_source_symbols_tab(session, (void **) source_tbl);
-	if(oret != OF_STATUS_OK)
+	if(oret != OF_STATUS_OK) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: openfec decode step 3 (getting decoded output) failed\n");
 		return -BEF_ERR_OPENFEC;
+	}
 
 	/* Set the source table to point at our output buffer */
 	*output = bef_malloc(*onbyte);
@@ -1175,8 +1261,12 @@ static int bef_decode_wirehair(char **frags, uint32_t frag_len, size_t frag_b,
 	*onbyte = size * header.k;
 
 	codec = wirehair_decoder_create(0, *onbyte, size);
-	if(codec == NULL)
+	if(codec == NULL) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: Wirehair decode creation failed\n");
 		return -BEF_ERR_WIREHAIR;
+	}
 
 	for(uint32_t i = 0; i < frag_len && res == Wirehair_NeedMore; i++) {
 		memcpy(&frag_h, *(frags + i), sizeof(frag_h));
@@ -1187,6 +1277,9 @@ static int bef_decode_wirehair(char **frags, uint32_t frag_len, size_t frag_b,
 				      frag_h.nbyte);
 		if(res != Wirehair_Success && res != Wirehair_NeedMore) {
 			wirehair_free(codec);
+			if(bef_vflag)
+				fprintf(stderr,
+					"ERROR: Wirehair decode failed\n");
 			return -BEF_ERR_WIREHAIR;
 		}
 	}
@@ -1196,6 +1289,9 @@ static int bef_decode_wirehair(char **frags, uint32_t frag_len, size_t frag_b,
 	if(res != Wirehair_Success) {
 		bef_decode_free(*output);
 		wirehair_free(codec);
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: Wirehair decode recovery failed\n");
 		return -BEF_ERR_WIREHAIR;
 	}
 
@@ -1211,8 +1307,12 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 	uint32_t *max = (uint32_t *) p;
 	struct bef_real_header *header = (struct bef_real_header *) p;
 
-	if(flag >= BEF_SPAR_MAXNUM)
+	if(flag >= BEF_SPAR_MAXNUM) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: bef_sky_par got invalid input\n");
 		return -BEF_ERR_INVALINPUT;
+	}
 
 	switch(par_t) {
 #ifdef BEF_LIBERASURECODE
@@ -1385,14 +1485,25 @@ int bef_decode_ecc(char **frags, uint32_t frag_len, size_t frag_b,
 		 struct bef_real_header header) = NULL;
 
 	/* Not enough fragments */
-	if(frag_len < header.k)
+	if(frag_len < header.k) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: Number of fragments (%u) is less than k (%u)\n",
+				frag_len, header.k);
 		return -BEF_ERR_NEEDMORE;
-	else if(frag_len == 0)
+	} else if(frag_len == 0) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: Number of fragments is 0\n");
 		return -BEF_ERR_INVALINPUT;
+	}
 
 	/* All our codes require at least one parity */
-	if(header.m == 0)
+	if(header.m == 0) {
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: m is 0\n");
 		return -BEF_ERR_INVALINPUT;
+	}
 
 	if(bef_vflag > 1)
 		fprintf(stderr,
@@ -1883,8 +1994,11 @@ static int bef_deconstruct_header(int input, struct bef_real_header *header)
 	if(bret != sizeof(head))
 		return -BEF_ERR_READERR;
 
-	if(memcmp(head.magic, bef_magic, 7) != 0)
+	if(memcmp(head.magic, bef_magic, 7) != 0) {
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: Invalid Header Magic\n");
 		return -BEF_ERR_INVALHEAD; //WTF, it's not our BABE!?
+	}
 	ret = bef_digest((char *) &(head.header), sizeof(head.header), hash,
 			 head.hash_t);
 	if(ret != 0)
@@ -2028,8 +2142,11 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	struct bef_frag_header frag_h;
 	uint64_t frag_b = header.nbyte - sizeof(frag_h);
 
-	if(frag_b > header.nbyte)
+	if(frag_b > header.nbyte) {
+		if(bef_vflag)
+			fprintf(stderr, "ERROR: fragment byte size overflow\n");
 		return -BEF_ERR_OVERFLOW;
+	}
 
 	bef_deconstruct_buffers(&buf_arr, (uint32_t) header.k + header.m,
 				frag_b, header.il_n);
@@ -2197,8 +2314,12 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	sbyte *= (size_t) header.il_n * ((uint32_t) header.k + header.m);
 
 	if(header.nbyte >=
-	   (UINT64_MAX - sbyte) / (((uint32_t) header.k + header.m) * header.il_n))
+	   (UINT64_MAX - sbyte) / (((uint32_t) header.k + header.m) * header.il_n)) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: Fragment size is greater than max (UINT64_MAX / number of fragments\n");
 		return -BEF_ERR_INVALINPUT;
+	}
 
 	/* Allocate our buffers */
 	ibuf_s = ((uint32_t) header.k + header.m) * header.nbyte * header.il_n;

@@ -47,7 +47,7 @@ uint8_t bef_mflag = 0;
 /* Our number of threads */
 uint16_t bef_numT = 0;
 
-void bef_help(void) {
+static void bef_help(void) {
 printf("bef is a command line utility that encodes and decodes erasure coded streams.\n");
 printf("More information can be found in the manpage\n\n");
 printf("-h|--help			Print this help message\n");
@@ -74,8 +74,8 @@ printf("-o|--output			Output file\n\n");
 }
 
 /* More info for each in the man page */
-int bef_set_preset(struct bef_real_header *header, uint64_t *bsize,
-		   int preset)
+static int bef_set_preset(struct bef_real_header *header, uint64_t *bsize,
+			  int preset)
 {
 	int ret = 0;
 
@@ -129,7 +129,7 @@ int bef_set_preset(struct bef_real_header *header, uint64_t *bsize,
 	return ret;
 }
 
-uint64_t bef_convert_suffix(char *suffix)
+static uint64_t bef_convert_suffix(char *suffix)
 {
 	uint64_t ret = 1;
 

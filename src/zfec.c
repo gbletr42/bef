@@ -217,7 +217,7 @@ _addmul1_avx2(register gf*restrict dst, register const gf*restrict src, gf c, si
 			     gf_mulc[0xC0], gf_mulc[0xD0],
 			     gf_mulc[0xE0], gf_mulc[0xF0]);
     mask1 = _mm256_set1_epi8(0x0F);
-    mask2 = _mm256_set1_epi8(0xF0);
+    mask2 = _mm256_set1_epi8((char) 0xF0);
 
     for (; dst < lim; dst += AVX_SIZE, src += AVX_SIZE) {
         src_mm = _mm256_loadu_si256((__m256i *) src);
@@ -262,7 +262,7 @@ _addmul1_sse3(register gf*restrict dst, register const gf*restrict src, gf c, si
 			  gf_mulc[0xC0], gf_mulc[0xD0],
 			  gf_mulc[0xE0], gf_mulc[0xF0]);
     mask1 = _mm_set1_epi8(0x0F);
-    mask2 = _mm_set1_epi8(0xF0);
+    mask2 = _mm_set1_epi8((char) 0xF0);
 
     for (; dst < lim; dst += SSE_SIZE, src += SSE_SIZE) {
         src_mm = _mm_loadu_si128((__m128i *) src);

@@ -28,38 +28,48 @@ extern "C" int bef_cm256_encode(bef_cm256_encoder_params params,
 				bef_cm256_block *originals,
 				void *recoveryBlocks)
 {
+	int ret;
 	CM256::cm256_encoder_params p = {params.OriginalCount,
 					 params.RecoveryCount,
 					 params.BlockBytes};
-	CM256::cm256_block b[params.OriginalCount];
+	CM256::cm256_block *b = reinterpret_cast<CM256::cm256_block *>(bef_calloc(params.OriginalCount, sizeof(CM256::cm256_block)));
 
 	for(int i = 0; i < params.OriginalCount; i++) {
 		b[i].Block = originals[i].Block;
 		b[i].Index = originals[i].Index;
 	}
 
-	if(! cm256.isInitialized())
+	if(! cm256.isInitialized()) {
+		free(b);
 		return -BEF_ERR_CM256;
+	}
 
-	return cm256.cm256_encode(p, b, recoveryBlocks);
+	ret = cm256.cm256_encode(p, b, recoveryBlocks);
+	free(b);
+	return ret;
 }
 
 extern "C" int bef_cm256_decode(bef_cm256_encoder_params params,
 				bef_cm256_block *blocks)
 {
+	int ret;
 	CM256::cm256_encoder_params p = {params.OriginalCount,
 					 params.RecoveryCount,
 					 params.BlockBytes};
-	CM256::cm256_block b[params.OriginalCount];
+	CM256::cm256_block *b = reinterpret_cast<CM256::cm256_block *>(bef_calloc(params.OriginalCount, sizeof(CM256::cm256_block)));
 
 	for(int i = 0; i < params.OriginalCount; i++) {
 		b[i].Block = blocks[i].Block;
 		b[i].Index = blocks[i].Index;
 	}
 
-	if(! cm256.isInitialized())
+	if(! cm256.isInitialized()) {
+		free(b);
 		return -BEF_ERR_CM256;
+	}
 
-	return cm256.cm256_decode(p, b);
+	ret = cm256.cm256_decode(p, b);
+	free(b);
+	return ret;
 }
 

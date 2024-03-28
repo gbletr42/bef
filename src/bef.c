@@ -2325,9 +2325,9 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 		return ret;
 
 	if(sbyte == 0) {
-		sbyte = header.nbyte / 2;
+		sbyte = header.nbyte - 1;
 		if(bef_vflag)
-			fprintf(stderr, "Setting sbyte to default value %lu (half of fragment size)\n",
+			fprintf(stderr, "Setting sbyte to default value %lu (one less than fragment size)\n",
 				sbyte);
 	} else if(sbyte >= header.nbyte) { //Funky things happen otherwise
 		if(bef_vflag)

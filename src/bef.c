@@ -107,7 +107,7 @@ static fec_t *bef_context = NULL;
 /* Global buffers for use with encoding/decoding */
 static size_t bef_work_s;
 static char *bef_work = NULL;
-static char ***bef_work_arr = NULL; //For use with construction
+static char ***bef_work_arr = NULL;
 
 void *bef_malloc(size_t sz)
 {
@@ -647,6 +647,26 @@ static void bef_construct_free(uint16_t il_n)
 	free(bef_work_arr);
 }
 
+/* Similar to construct, except we don't use our work buffer and instead just
+ * allocate the work array. Rather pointers will be copied directly from the
+ * input buffer, and worked with from there (as unlike with constructing, in
+ * deconstructing the input buffer will be larger than the necessary fragment
+ * body).
+ */
+static void bef_deconstruct_alloc(uint32_t km, uint16_t il_n)
+{
+	bef_work_arr = bef_malloc(il_n * sizeof(*bef_work_arr));
+	for(uint16_t i = 0; i < il_n; i++)
+		*(bef_work_arr + i) = bef_malloc(km * sizeof(*(*bef_work_arr)));
+}
+
+static void bef_deconstruct_free(uint32_t km, uint16_t il_n)
+{
+	for(uint16_t i = 0; i < il_n; i++)
+		free(*(bef_work_arr + i));
+	free(bef_work_arr);
+}
+
 #ifdef BEF_LIBERASURECODE
 static int bef_encode_liberasurecode(const char *input, size_t inbyte,
 				     char **data, char **parity,
@@ -1103,6 +1123,7 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 static int bef_decode_liberasurecode(char **frags, uint32_t frag_len,
 				     size_t frag_b,
 				     char **output, size_t *onbyte,
+				     uint8_t flag,
 				     struct bef_real_header header)
 {
 	int ret;
@@ -1120,7 +1141,8 @@ static int bef_decode_liberasurecode(char **frags, uint32_t frag_len,
 	}
 
 	/* Copy over our data */
-	*output = bef_malloc((size_t) tmp_len);
+	if(flag == BEF_BUFFER_NEW)
+		*output = bef_malloc((size_t) tmp_len);
 	*onbyte = tmp_len;
 	memcpy(*output, tmp_output, *onbyte);
 
@@ -1128,7 +1150,8 @@ static int bef_decode_liberasurecode(char **frags, uint32_t frag_len,
 	ret = liberasurecode_decode_cleanup(bef_desc, tmp_output);
 	if(ret < 0) {
 		ret = -ret;
-		bef_decode_free(*output);
+		if(flag == BEF_BUFFER_NEW)
+			bef_decode_free(*output);
 	} else if(ret > 0)
 		ret = 0;
 
@@ -1142,10 +1165,11 @@ static int bef_decode_liberasurecode(char **frags, uint32_t frag_len,
  * numbers with parities.
  */
 static int bef_decode_libfec(char **frags, uint32_t frag_len, size_t frag_b,
-			     char **output, size_t *onbyte,
+			     char **output, size_t *onbyte, uint8_t flag,
 			     struct bef_real_header header)
 {
-	char *out_arr[header.m]; //At most m outputs
+	char *rec_buf;
+	char *rec_arr[header.m]; //At most m outputs
 	char *recon_arr[header.k]; //At most k outputs
 	uint32_t block_nums[header.k];
 	uint32_t found;
@@ -1163,15 +1187,17 @@ static int bef_decode_libfec(char **frags, uint32_t frag_len, size_t frag_b,
 				"ERROR: Too many missing fragments to reconstruct\n");
 		return -BEF_ERR_NEEDMORE;
 	}
+	rec_buf = bef_malloc(size * found);
 	for(uint32_t i = 0; i < found; i++)
-		out_arr[i] = bef_malloc(size);
+		rec_arr[i] = rec_buf + i * size;
 
 	/* Allocate our output buffer */
-	*output = bef_malloc(*onbyte);
+	if(flag == BEF_BUFFER_NEW)
+		*output = bef_malloc(*onbyte);
 
 	if(found > 0) //We can just read directly if they're all good
 		fec_decode(bef_context, (unsigned char **) recon_arr,
-			   (unsigned char **) out_arr,
+			   (unsigned char **) rec_arr,
 			   (unsigned int *) block_nums, size);
 
 	/* Write to output buffer */
@@ -1179,15 +1205,14 @@ static int bef_decode_libfec(char **frags, uint32_t frag_len, size_t frag_b,
 		if(block_nums[i] == i)
 			tmp = recon_arr[i];
 		else if(j < found)
-			tmp = out_arr[j++];
+			tmp = rec_arr[j++];
 
 		if(tmp != NULL)
 			memcpy(*output + i * size, tmp, size);
 		tmp = NULL;
 	}
 
-	for(uint32_t i = 0; i < found; i++)
-		free(out_arr[i]);
+	free(rec_buf);
 	return 0;
 }
 
@@ -1197,7 +1222,7 @@ static int bef_decode_libfec(char **frags, uint32_t frag_len, size_t frag_b,
  * reconstruction since it seems to pop up frequently...
  */
 static int bef_decode_cm256(char **frags, uint32_t dummy, size_t frag_b,
-			    char **output, size_t *onbyte,
+			    char **output, size_t *onbyte, uint8_t flag,
 			    struct bef_real_header header)
 {
 	int ret;
@@ -1207,7 +1232,9 @@ static int bef_decode_cm256(char **frags, uint32_t dummy, size_t frag_b,
 					frag_b - sizeof(struct bef_fec_header)};
 	bef_cm256_block blocks[header.k];
 	*onbyte = (uint64_t) params.BlockBytes * header.k;
-	*output = bef_malloc(*onbyte);
+
+	if(flag == BEF_BUFFER_NEW)
+		*output = bef_malloc(*onbyte);
 
 	bef_decode_reconstruct(frags, header.k, recon_arr, block_nums,
 			       (uint32_t) header.k, header.m,
@@ -1220,7 +1247,8 @@ static int bef_decode_cm256(char **frags, uint32_t dummy, size_t frag_b,
 
 	ret = bef_cm256_decode(params, blocks);
 	if(ret != 0) {
-		bef_decode_free(*output);
+		if(flag == BEF_BUFFER_NEW)
+			bef_decode_free(*output);
 		if(bef_vflag)
 			fprintf(stderr, "ERROR: CM256 decode failed\n");
 		return -BEF_ERR_CM256;
@@ -1240,7 +1268,7 @@ static int bef_decode_cm256(char **frags, uint32_t dummy, size_t frag_b,
  * many fragments as possible. So we try our best to provide that.
  */
 static int bef_decode_openfec(char **frags, uint32_t frag_len, size_t frag_b,
-			      char **output, size_t *onbyte,
+			      char **output, size_t *onbyte, uint8_t flag,
 			      struct bef_real_header header)
 {
 	int ret;
@@ -1284,7 +1312,8 @@ static int bef_decode_openfec(char **frags, uint32_t frag_len, size_t frag_b,
 	}
 
 	/* Set the source table to point at our output buffer */
-	*output = bef_malloc(*onbyte);
+	if(flag == BEF_BUFFER_NEW)
+		*output = bef_malloc(*onbyte);
 	for(uint16_t i = 0; i < header.k; i++)
 		memcpy(*output + i * size, source_tbl[i], size);
 
@@ -1302,12 +1331,13 @@ static int bef_decode_openfec(char **frags, uint32_t frag_len, size_t frag_b,
 
 #ifdef BEF_LEOPARD
 static int bef_decode_leopard(char **frags, uint32_t frag_len, size_t frag_b,
-			      char **output, size_t *onbyte,
+			      char **output, size_t *onbyte, uint8_t flag,
 			      struct bef_real_header header)
 {
 	int ret = 0;
 	LeopardResult res;
 	uint32_t work_count;
+	char *work_buf;
 	char **work_data;
 	char **recon_arr;
 	uint32_t *block_nums;
@@ -1318,12 +1348,15 @@ static int bef_decode_leopard(char **frags, uint32_t frag_len, size_t frag_b,
 	block_nums = bef_calloc(((uint32_t) header.k + header.m),
 				sizeof(*block_nums));
 	*onbyte = size * header.k;
-	*output = bef_malloc(*onbyte);
 	work_count = leo_decode_work_count(header.k, header.m);
+	work_buf = bef_malloc(work_count * size);
 	work_data = bef_malloc(work_count * sizeof(*work_data));
 
+	if(flag == BEF_BUFFER_NEW)
+		*output = bef_malloc(*onbyte);
+
 	for(uint32_t i = 0; i < work_count; i++)
-		*(work_data + i) = bef_malloc(size);
+		*(work_data + i) = work_buf + i * size;
 
 	bef_decode_reconstruct(frags, frag_len, recon_arr, block_nums,
 			       (uint32_t) header.k, header.m, BEF_RECON_NULL);
@@ -1340,16 +1373,15 @@ static int bef_decode_leopard(char **frags, uint32_t frag_len, size_t frag_b,
 				       size);
 		}
 	} else {
-		bef_decode_free(*output);
+		if(flag == BEF_BUFFER_NEW)
+			bef_decode_free(*output);
 		if(bef_vflag)
 			fprintf(stderr, "ERROR: Leopard Decode failed\n");
 		ret = -BEF_ERR_LEOPARD;
 	}
 
-	for(uint32_t i = 0; i < work_count; i++)
-		free(*(work_data + i));
+	free(work_buf);
 	free(work_data);
-
 	free(recon_arr);
 	free(block_nums);
 	return ret;
@@ -1362,7 +1394,7 @@ static int bef_decode_leopard(char **frags, uint32_t frag_len, size_t frag_b,
  * blocks we have into the decoder.
  */
 static int bef_decode_wirehair(char **frags, uint32_t frag_len, size_t frag_b,
-			      char **output, size_t *onbyte,
+			      char **output, size_t *onbyte, uint8_t flag,
 			      struct bef_real_header header)
 {
 	WirehairResult res = Wirehair_NeedMore;
@@ -1395,10 +1427,12 @@ static int bef_decode_wirehair(char **frags, uint32_t frag_len, size_t frag_b,
 		}
 	}
 
-	*output = bef_malloc(*onbyte);
+	if(flag == BEF_BUFFER_NEW)
+		*output = bef_malloc(*onbyte);
 	res = wirehair_recover(codec, *output, *onbyte);
 	if(res != Wirehair_Success) {
-		bef_decode_free(*output);
+		if(flag == BEF_BUFFER_NEW)
+			bef_decode_free(*output);
 		wirehair_free(codec);
 		if(bef_vflag)
 			fprintf(stderr,
@@ -1583,12 +1617,12 @@ int bef_encode_ecc(const char *input, size_t inbyte, char **data,
 }
 
 int bef_decode_ecc(char **frags, uint32_t frag_len, size_t frag_b,
-		   char **output, size_t *onbyte,
+		   char **output, size_t *onbyte, uint8_t flag,
 		   struct bef_real_header header)
 {
 	int ret = 0;
-	int (*f)(char **, uint32_t, size_t, char **, size_t *,
-		 struct bef_real_header header) = NULL;
+	int (*f)(char **, uint32_t, size_t, char **, size_t *, uint8_t,
+		 struct bef_real_header) = NULL;
 
 	/* Not enough fragments */
 	if(frag_len < header.k) {
@@ -1620,7 +1654,7 @@ int bef_decode_ecc(char **frags, uint32_t frag_len, size_t frag_b,
 	if(ret != 0)
 		return ret;
 
-	ret = (*f)(frags, frag_len, frag_b, output, onbyte, header);
+	ret = (*f)(frags, frag_len, frag_b, output, onbyte, flag, header);
 
 	return ret;
 }
@@ -2046,28 +2080,6 @@ static int bef_verify_fragment(char *frag, uint64_t nbyte, bef_hash_t hash_t,
 		return 0;
 }
 
-static void bef_deconstruct_buffers(char ****buf_arr, uint32_t km,
-				    uint64_t nbyte, uint16_t il_n)
-{
-	*buf_arr = bef_malloc(il_n * sizeof(*(*buf_arr)));
-	for(uint16_t i = 0; i < il_n; i++) {
-		*(*buf_arr + i) = bef_malloc(km * sizeof(*(*(*buf_arr))));
-
-		for(uint32_t j = 0; j < km; j++)
-			*(*(*buf_arr + i) + j) = bef_malloc(nbyte);
-	}
-}
-
-static void bef_deconstruct_free(char ***buf_arr, uint32_t km, uint16_t il_n)
-{
-	for(uint16_t i = 0; i < il_n; i++) {
-		for(uint32_t j = 0; j < km; j++)
-			free(*(*(buf_arr + i) + j));
-		free(*(buf_arr + i));
-	}
-	free(buf_arr);
-}
-
 static int bef_deconstruct_header(int input, struct bef_real_header *header)
 {
 	int ret;
@@ -2145,7 +2157,7 @@ static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
 }
 
 static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
-				     char ***buf_arr, uint32_t *index,
+				     uint32_t *index,
 				     uint64_t *pbyte, size_t *ahead,
 				     uint64_t il_count, uint64_t sbyte,
 				     struct bef_real_header header)
@@ -2187,9 +2199,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 			i = frag_h.block_num % header.il_n;
 
 			if(index[i] < (uint32_t) header.k + header.m) {
-				memcpy(*(*(buf_arr + i) + index[i]),
-				       ibuf + offset + sizeof(frag_h),
-				       header.nbyte - sizeof(frag_h));
+				*(*(bef_work_arr + i) + index[i]) = ibuf + offset + sizeof(frag_h);
 				index[i] += 1;
 			}
 		}
@@ -2220,12 +2230,11 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 {
 	int ret;
 	int flag = 0;
-	char *output;
-	size_t onbyte;
-	char ***buf_arr;
+	size_t onbyte = *obuf_s / header.il_n;
 	uint32_t *index = bef_malloc(header.il_n * sizeof(*index));
 	struct bef_frag_header frag_h;
 	uint64_t frag_b = header.nbyte - sizeof(frag_h);
+	char *tmp;
 
 	if(frag_b > header.nbyte) {
 		if(bef_vflag)
@@ -2234,53 +2243,48 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 		return -BEF_ERR_OVERFLOW;
 	}
 
-	bef_deconstruct_buffers(&buf_arr, (uint32_t) header.k + header.m,
-				frag_b, header.il_n);
-
-	ret = bef_deconstruct_fragments(ibuf, ibuf_s, buf_arr, index,
+	ret = bef_deconstruct_fragments(ibuf, ibuf_s, index,
 					pbyte, ahead, il_count, sbyte, header);
 	if(ret != 0)
 		goto out;
 
+	/* Do our first decode two times, like with construction, to get
+	 * the size of the output buffer
+	 */
+	if(*obuf_s == 0) {
+		ret = bef_decode_ecc(*bef_work_arr, *index,
+				     frag_b, obuf, &onbyte,
+				     BEF_BUFFER_NEW, header);
+		if(ret != 0) {
+			goto out;
+		} else {
+			*obuf_s = header.il_n * onbyte;
+			*obuf = bef_realloc(*obuf, *obuf_s);
+		}
+	}
+
+	assert(*obuf != NULL);
+
 #ifdef _OPENMP
 		omp_set_num_threads(bef_numT);
-#pragma omp parallel for private(output, onbyte, ret) if(bef_par_multi(header.par_t) == 0)
+#pragma omp parallel for private(tmp, onbyte, ret) if(bef_par_multi(header.par_t) == 0)
 #endif
 	for(uint16_t i = 0; i < header.il_n; i++) {
 		if(flag != 0)
 			continue; //Iterate until done
 
-		ret = bef_decode_ecc(*(buf_arr + i), index[i],
-				     frag_b, &output, &onbyte, header);
-#ifdef _OPENMP
-#pragma omp critical
-{
-#endif
+		tmp = *obuf + i * onbyte;
+		ret = bef_decode_ecc(*(bef_work_arr + i), *(index + i),
+				     frag_b, &tmp, &onbyte,
+				     BEF_BUFFER_GIFT, header);
 		if(ret != 0)
 			flag = ret;
-		else {
-			/* Allocate our output buffer */
-			if(*obuf_s == 0) {
-				*obuf_s = header.il_n * onbyte;
-				*obuf = bef_malloc(*obuf_s);
-			}
-
-			/* Copy over the results to real output buffer */
-			memcpy(*obuf + i * onbyte, output, onbyte);
-
-			bef_decode_free(output);
-		}
-#ifdef _OPENMP
-}
-#endif
 	}
 
 	if(flag != 0)
 		ret = flag;
 out:
 	free(index);
-	bef_deconstruct_free(buf_arr, (uint32_t) header.k + header.m,
-			     header.il_n);
 	return ret;
 }
 
@@ -2422,6 +2426,9 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	sbyte /= (size_t) header.il_n * ((uint32_t) header.k + header.m);
 	ibuf = bef_malloc(ibuf_s);
 
+	/* Allocate our work arrays */
+	bef_deconstruct_alloc((uint32_t) header.k + header.m, header.il_n);
+
 	/* Another eternal read loop incoming */
 	while(1) {
 		bret = bef_safe_rw(input, ibuf + ahead,
@@ -2457,13 +2464,14 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 
 		/* Copy over input that was read ahead */
 		if(ahead > 0)
-			memcpy(ibuf, ibuf + ibuf_s - ahead, ahead);
+			memmove(ibuf, ibuf + ibuf_s - ahead, ahead);
 
 		il_count++;
 	}
 
 out:
 	bef_destroy(header);
+	bef_deconstruct_free((uint32_t) header.k + header.m, header.il_n);
 	free(obuf);
 	free(ibuf);
 	return ret;

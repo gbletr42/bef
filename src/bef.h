@@ -207,7 +207,7 @@ void bef_encode_free(char **data, char **parity, uint16_t k, uint16_t m);
  * error codes not yet defined, but will return 0 when successful
  */
 int bef_decode_ecc(char **frags, uint32_t frag_len, size_t frag_b,
-		   char **output, size_t *onbyte,
+		   char **output, size_t *onbyte, uint8_t flag,
 		   struct bef_real_header header);
 
 /* Frees the output buffer from bef_decode_ecc(). Of course you could also just

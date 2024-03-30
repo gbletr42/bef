@@ -630,7 +630,7 @@ static void bef_construct_alloc(uint64_t nbyte, uint32_t km, uint16_t il_n)
 
 	for(uint16_t i = 0; i < il_n; i++) {
 		offset = i * nbyte;
-		*(bef_work_arr + i) = bef_malloc(km * sizeof(*(*bef_work_arr)));
+		*(bef_work_arr + i) = bef_calloc(km,sizeof(*(*bef_work_arr)));
 
 		for(uint32_t j = 0; j < km; j++) {
 			*(*(bef_work_arr + i) + j) = bef_work + offset;
@@ -995,7 +995,7 @@ static int bef_encode_wirehair(const char *input, size_t inbyte, char **data,
 	}
 	for(uint16_t i = 0; i < header.m; i++) {
 		/* We need to zero out the parities in case nbyte < frag_b */
-		*(parity + i) = bef_calloc(1, size + sizeof(*frag_h));
+		memset(*(parity + i), '\0', size + sizeof(*frag_h));
 	}
 
 	/* Create our context and encode our parities */

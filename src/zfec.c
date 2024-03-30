@@ -24,7 +24,9 @@
 #include <string.h>
 #include <assert.h>
 
+#if defined __i386__ || defined __x86_64__
 #include <immintrin.h>
+#endif
 
 /*
  * Primitive polynomials - see Lin & Costello, Appendix A,

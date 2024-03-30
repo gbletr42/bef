@@ -32,7 +32,7 @@ extern "C" int bef_cm256_encode(bef_cm256_encoder_params params,
 	CM256::cm256_encoder_params p = {params.OriginalCount,
 					 params.RecoveryCount,
 					 params.BlockBytes};
-	CM256::cm256_block *b = reinterpret_cast<CM256::cm256_block *>(bef_calloc(params.OriginalCount, sizeof(CM256::cm256_block)));
+	CM256::cm256_block *b = reinterpret_cast<CM256::cm256_block *>(bef_malloc(params.OriginalCount * sizeof(CM256::cm256_block)));
 
 	for(int i = 0; i < params.OriginalCount; i++) {
 		b[i].Block = originals[i].Block;
@@ -56,7 +56,7 @@ extern "C" int bef_cm256_decode(bef_cm256_encoder_params params,
 	CM256::cm256_encoder_params p = {params.OriginalCount,
 					 params.RecoveryCount,
 					 params.BlockBytes};
-	CM256::cm256_block *b = reinterpret_cast<CM256::cm256_block *>(bef_calloc(params.OriginalCount, sizeof(CM256::cm256_block)));
+	CM256::cm256_block *b = reinterpret_cast<CM256::cm256_block *>(bef_malloc(params.OriginalCount * sizeof(CM256::cm256_block)));
 
 	for(int i = 0; i < params.OriginalCount; i++) {
 		b[i].Block = blocks[i].Block;

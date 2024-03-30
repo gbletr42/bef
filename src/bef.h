@@ -192,7 +192,7 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
  * error codes not yet defined, but will return 0 when successful
  */
 int bef_encode_ecc(const char *input, size_t inbyte, char **data,
-		   char **parity, size_t *frag_len,
+		   char **parity, size_t *frag_len, uint8_t flag,
 		   struct bef_real_header header);
 
 /* Frees the data structures allocated by bef_encode_ecc */

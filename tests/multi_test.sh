@@ -4,7 +4,7 @@
 
 for file in test1 test2 test3
 do
-	if ! cmp $file <(bef -c -T0 -i $file | bef -d)
+	if ! cmp $file <(bef -c -T0 -i $file | bef -d -T0)
 	then
 		echo "Multithreaded test for $file failed!"
 	fi

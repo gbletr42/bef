@@ -12,6 +12,7 @@ fi
 
 bash prepare_tests.sh
 bash io_test.sh
+bash multi_test.sh
 bash insertion_test.sh
 bash bsize_test.sh
 bash frag_test.sh

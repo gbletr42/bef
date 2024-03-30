@@ -45,7 +45,7 @@ uint8_t bef_rflag = 0;
 uint8_t bef_mflag = 0;
 
 /* Our number of threads */
-uint16_t bef_numT = 0;
+uint16_t bef_numT = 1;
 
 static void bef_help(void) {
 printf("bef is a command line utility that encodes and decodes erasure coded streams.\n");

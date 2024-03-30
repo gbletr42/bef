@@ -127,7 +127,7 @@ xxhash: Uses the xxHash hash algorithm, provided by xxHash and a mandatory depen
 Sets the number of bytes that are scanned for a proper fragment, if no proper fragment is found. Specifically, if the last fragment was good, then this scans s bytes ahead for another good fragment, otherwise it scans s bytes ahead and behind.
 .TP
 \fB-T\fR, \fB\-\-threads\fR
-Sets the number of threads that are used to encode/decode concurrently. A given value of 0 is equivalent to the default number of threads, which is the minimum of either the number of interleaved blocks or the number of threads available. Currently multithreading support is implemented via OpenMP.
+Sets the number of threads that are used to encode/decode concurrently. A given value of 0 is equivalent to the minimum of either the number of interleaved blocks or the number of threads available. By default, bef will only use one thread. Currently multithreading support is implemented via OpenMP.
 .TP
 \fB\-i\fR, \fB\-\-input\fR
 The given input file to read from. If none are given, then by default it will read from STDIN.

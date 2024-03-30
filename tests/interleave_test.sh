@@ -5,7 +5,7 @@ for il_n in 1 2 3 4 5 8 9 16 17 32 33 64 65 128 129 256 257 512 513 1024 1025 20
 do
 	for file in test1 test2 test3
 	do
-		if ! cmp $file <(bef -c -b 1 -l $il_n -i $file | bef -d)
+		if ! cmp $file <(bef -c -T0 -b 1 -l $il_n -i $file | bef -d -T0)
 		then
 			echo "interleave test for $il_n on $file failed!"
 		fi

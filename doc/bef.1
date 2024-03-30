@@ -1,4 +1,4 @@
-.TH "bef" "1" "23 Mar 2024" "bef v0.2.3" "User Commands"
+.TH "bef" "1" "30 Mar 2024" "bef v0.2.4" "User Commands"
 .P
 .SH "NAME"
 bef \- An extensible, fast, and useable file utility to encode and decode erasure coded streams of data.
@@ -15,7 +15,7 @@ It is centered around the concept of blocks of data, of determinate size, which 
 .P
 [B1-F1] -> [B2-F1] -> [B3-F1] -> [B1-F2] -> [...]
 .P
-The utility is extremely fast in its default settings, computing around ~1000MiB/s on a i5-7300U CPU on a laptop.
+The utility is extremely fast in its default settings, computing around ~1500MiB/s on a i5-7300U CPU on a laptop.
 .P
 .SH "OPTIONS"
 .SS "Byte Suffixes"
@@ -86,7 +86,7 @@ jerasure-vand: The Vandermonde Reed Solomon implementation from libJerasure, pro
 .IP
 jerasure-cauchy: The Cauchy Reed Solomon implementation from libJerasure, provided by liberasurecode. Reasonably fast, but single-threaded, scales poorly, and the max number of fragments is only 16.
 .IP
-liberasurecode-vand: The Vandermonde Reed Solomon implementation offered by liberasurecode, terribly slow and scales poorly. Max number of fragments is 32.
+liberasurecode-vand: The Vandermonde Reed Solomon implementation offered by liberasurecode, reasonably fast, but scales poorly. Max number of fragments is 32.
 .IP
 intel-vand: The Vandermonde Reed Solomon implementation offered by Intel's ISA-L, provided by liberasurecode. Very fast and scales reasonably well. Max number of fragments is 32.
 .IP

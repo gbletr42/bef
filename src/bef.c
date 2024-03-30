@@ -90,7 +90,7 @@
 #define BEF_BUFFER_GIFT		1 //Buffer[s] given are a gift, use them
 
 /* Encode Allocation Flags */
-#define BEF_ENCODE_ALLOC	1 //No header
+#define BEF_ENCODE_ALLOC	1
 #define BEF_ENCODE_FEC		2 //bef_fec_header
 
 /* Struct for libfec header */
@@ -727,7 +727,7 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 		bef_encode_alloc(data, parity, header.k, header.m, size,
 				 BEF_ENCODE_FEC);
 
-	/* Allocate our arrays, moving the pointer past the header. I know, it's
+	/* Make our arrays, moving the pointer past the header. I know, it's
 	 * a bit hacky, but it works!
 	 */
 	for(int i = 0; i < header.k; i++) {
@@ -780,7 +780,6 @@ static int bef_encode_cm256(const char *input, size_t inbyte, char **data,
 		bef_encode_alloc(data, parity, header.k, header.m,
 				 params.BlockBytes, BEF_ENCODE_FEC);
 
-	/* Allocate our arrays */
 	for(uint16_t i = 0; i < header.k; i++)
 		memcpy(*(data + i) + sizeof(struct bef_fec_header),
 		       input + i * params.BlockBytes, params.BlockBytes);
@@ -841,7 +840,7 @@ static int bef_encode_openfec(const char *input, size_t inbyte, char **data,
 	if(ret != 0)
 		return ret;
 
-	/* Allocate our arrays and set their pointers in the symbol table
+	/* Make our arrays and set their pointers in the symbol table
 	 * appropiately. Likewise, also encode during this step, as we process
 	 * each symbol individually.
 	 */
@@ -984,7 +983,7 @@ static int bef_encode_wirehair(const char *input, size_t inbyte, char **data,
 		bef_encode_alloc(data, parity, header.k, header.m, size,
 				 BEF_ENCODE_FEC);
 
-	/* Allocate our arrays */
+	/* Make our arrays */
 	for(uint16_t i = 0; i < header.k; i++) {
 		frag_h = (struct bef_fec_header *) *(data + i);
 		frag_h->block_num = i;
@@ -1177,7 +1176,6 @@ static int bef_decode_libfec(char **frags, uint32_t frag_len, size_t frag_b,
 	size_t size = frag_b - sizeof(struct bef_fec_header);
 	*onbyte = size * header.k;
 
-	/* We are guaranteed at least k, and that's all we need */
 	found = bef_decode_reconstruct(frags, header.k, recon_arr, block_nums,
 				       (uint32_t) header.k, header.m,
 				       BEF_RECON_REPLACE);
@@ -1317,7 +1315,7 @@ static int bef_decode_openfec(char **frags, uint32_t frag_len, size_t frag_b,
 	for(uint16_t i = 0; i < header.k; i++)
 		memcpy(*output + i * size, source_tbl[i], size);
 
-	/* free the allocated buffer */
+	/* free the allocated buffers */
 	for(uint16_t i = 0; i < header.k; i++)
 		if(block_nums[i] == UINT32_MAX)
 			free(source_tbl[i]);
@@ -1788,9 +1786,6 @@ static int bef_construct_frag(char *frag, size_t frag_len,
 	return 0;
 }
 
-/* output MUST BE AT LEAST (k+m) * nbyte large,
- * also frag_len + sizeof(bef_header) MUST EQUAL nbyte!!!
- */
 static int bef_construct_blocks(char ***blocks,
 				size_t frag_len, uint64_t pbyte,
 				uint64_t il_count,
@@ -2289,9 +2284,6 @@ out:
 	return ret;
 }
 
-/* Surprisingly _still_ simpler than encoding, I expected it to get a lot more
- * complicated accounting for deletions.
- */
 int bef_deconstruct(int input, int output, struct bef_real_header header,
 		    size_t sbyte)
 {

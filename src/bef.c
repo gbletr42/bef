@@ -597,7 +597,7 @@ static void bef_encode_alloc(char **data, char **parity, uint32_t k, uint16_t m,
 	for(int i = 0; i < m; i++) {
 		if(flag & BEF_ENCODE_ALLOC)
 			*(parity + i) = bef_malloc(size + offset);
-		if(flag == BEF_ENCODE_FEC) {
+		if(flag & BEF_ENCODE_FEC) {
 			header.block_num = k + i;
 			bef_prepare_fec_header(&header);
 			memcpy(*(parity + i), &header, sizeof(header));

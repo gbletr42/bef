@@ -632,7 +632,7 @@ static void bef_construct_alloc(uint64_t nbyte, uint32_t km, uint16_t il_n)
 		offset = i * nbyte;
 		*(bef_work_arr + i) = bef_malloc(km * sizeof(*(*bef_work_arr)));
 
-		for(uint16_t j = 0; j < km; j++) {
+		for(uint32_t j = 0; j < km; j++) {
 			*(*(bef_work_arr + i) + j) = bef_work + offset;
 			offset += il_n * nbyte;
 		}
@@ -2235,6 +2235,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	struct bef_frag_header frag_h;
 	uint64_t frag_b = header.nbyte - sizeof(frag_h);
 	char *tmp;
+	size_t tmp_s;
 
 	if(frag_b > header.nbyte) {
 		if(bef_vflag)
@@ -2267,7 +2268,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 
 #ifdef _OPENMP
 		omp_set_num_threads(bef_numT);
-#pragma omp parallel for private(tmp, onbyte, ret) if(bef_par_multi(header.par_t) == 0)
+#pragma omp parallel for private(tmp, ret) if(bef_par_multi(header.par_t) == 0)
 #endif
 	for(uint16_t i = 0; i < header.il_n; i++) {
 		if(flag != 0)
@@ -2275,7 +2276,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 
 		tmp = *obuf + i * onbyte;
 		ret = bef_decode_ecc(*(bef_work_arr + i), *(index + i),
-				     frag_b, &tmp, &onbyte,
+				     frag_b, &tmp, &tmp_s,
 				     BEF_BUFFER_GIFT, header);
 		if(ret != 0)
 			flag = ret;

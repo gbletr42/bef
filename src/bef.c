@@ -2389,6 +2389,15 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 		}
 	}
 
+#ifdef _OPENMP
+	if(bef_numT == 0) {
+		if(header.il_n <= omp_get_num_procs())
+			bef_numT = header.il_n;
+		else
+			bef_numT = omp_get_num_procs();
+	}
+#endif
+
 	ret = bef_init(header);
 	if(ret != 0)
 		return ret;

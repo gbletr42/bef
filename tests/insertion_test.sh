@@ -3,7 +3,7 @@
 
 bef -c -i test3 -o test3.bef
 dd if=test3.bef of=test3.bef.tmp bs=4K count=1023 status=none
-dd if=test3.bef bs=4M iseek=1 status=none >> test3.bef.tmp
+dd if=test3.bef bs=4M skip=1 status=none >> test3.bef.tmp
 
 if ! cmp test3 <(bef -d -i test3.bef.tmp)
 then
@@ -11,8 +11,8 @@ then
 fi
 
 dd if=test3.bef of=test3.bef.tmp bs=4K count=1024 status=none
-dd if=/dev/zero of=test3.bef.tmp bs=4K oseek=1024 count=1 status=none
-dd if=test3.bef bs=4M iseek=1 status=none >> test3.bef.tmp
+dd if=/dev/zero of=test3.bef.tmp bs=4K seek=1024 count=1 status=none
+dd if=test3.bef bs=4M skip=1 status=none >> test3.bef.tmp
 
 if ! cmp test3 <(bef -d -i test3.bef.tmp)
 then

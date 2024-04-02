@@ -30,7 +30,7 @@ nc -l -p 7000 | bef -d | unzstd | tar x
 
 Here's an example video of bef coping with corruption.
 
-![Example Video](example.mp4)
+https://github.com/gbletr42/bef/assets/150784815/ba15b4e9-f695-4be6-a80d-02830a8917be
 
 More information can be found in the manpage/help argument.
 

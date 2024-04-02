@@ -2106,10 +2106,12 @@ static int bef_deconstruct_header(int input, struct bef_real_header *header)
 			if(bef_vflag)
 				fprintf(stderr, "ERROR: Header corrupted!\n");
 			return -BEF_ERR_INVALHEAD; //How sad!
-		} else
+		} else {
 			*header = head.header_b;
-	} else
+		}
+	} else {
 		*header = head.header;
+	}
 
 	bef_unprepare_header(header); //Gotta get right endianness
 

@@ -28,6 +28,10 @@ tar c dir | zstd | bef -c | nc receiver 7000
 nc -l -p 7000 | bef -d | unzstd | tar x
 ```
 
+Here's an example video of bef coping with corruption.
+
+![Example Video](example.mp4)
+
 More information can be found in the manpage/help argument.
 
 # Format

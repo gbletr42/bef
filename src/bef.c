@@ -2251,7 +2251,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	for(i = 0; i < header.il_n; i++) {
 		if(index[i] < header.k) {
 			if(bef_vflag)
-				fprintf(stderr, "ERROR: Block %lu does not have k (%u) intact fragments",
+				fprintf(stderr, "ERROR: Block %lu does not have k (%u) intact fragments\n",
 					il_count * header.il_n - header.il_n + i,
 					header.k);
 

@@ -105,6 +105,7 @@ extern uint16_t bef_numT;
 #define BEF_HASH_XXHASH		9 //Default, fast and reasonably secure
 #define BEF_HASH_SHA512		10
 #define BEF_HASH_BLAKE2B	11
+#define BEF_HASH_CRC32C		12
 #define BEF_HASH_DEFAULT	BEF_HASH_XXHASH
 
 /* Our parity types, currently just copied liberasurecode

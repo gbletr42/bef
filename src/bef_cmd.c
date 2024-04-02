@@ -326,6 +326,8 @@ int main(int argc, char **argv) {
 				header.hash_t = BEF_HASH_MD5;
 			} else if(strcmp(optarg, "crc32") == 0) {
 				header.hash_t = BEF_HASH_CRC32;
+			} else if(strcmp(optarg, "crc32c") == 0) {
+				header.hash_t = BEF_HASH_CRC32C;
 			} else if(strcmp(optarg, "xxhash") == 0) {
 				header.hash_t = BEF_HASH_XXHASH;
 			} else {

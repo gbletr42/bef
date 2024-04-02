@@ -46,6 +46,9 @@
 #ifdef BEF_WIREHAIR
 #include <wirehair/wirehair.h>
 #endif
+#if defined __i386__ || defined __x86_64__
+#include <immintrin.h>
+#endif
 
 #include <string.h>
 #include <xxhash.h>
@@ -434,6 +437,27 @@ static int bef_digest_crc32(const char *input, size_t nbyte, uint8_t *output)
 }
 #endif
 
+#ifdef __x86_64__
+/* This uses the 64bit version for maximum throughput. Since input is padded to
+ * be a multiple of 64 bits/bytes (for both structs and read input), we don't
+ * need to worry about it not being that
+ */
+__attribute__((__target__("sse4.2")))
+static int bef_digest_crc32c(const char *input, size_t nbyte, uint8_t *output)
+{
+	uint64_t crc = 0;
+	uint64_t *buf = (uint64_t *) input;
+
+	for(; buf < input + nbyte; buf += 1)
+		_mm_crc32_u64(crc, *buf);
+
+	crc = htole64(crc);
+
+	memcpy(output, &crc, sizeof(crc));
+	return 0;
+}
+#endif
+
 #ifdef BEF_BLAKE3
 static int bef_digest_blake3(const char *input, size_t nbyte, uint8_t *output)
 {
@@ -569,6 +593,14 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 #ifdef BEF_ZLIB
 	case BEF_HASH_CRC32:
 		ret = bef_digest_crc32(input, nbyte, output);
+		break;
+#endif
+#ifdef __x86_64__
+	case BEF_HASH_CRC32C:
+		if(__builtin_cpu_supports("sse4.2"))
+			ret = bef_digest_crc32c(input, nbyte, output);
+		else
+			ret = -BEF_ERR_INVALINPUT;
 		break;
 #endif
 	case BEF_HASH_XXHASH:

@@ -597,10 +597,13 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 #endif
 #ifdef __x86_64__
 	case BEF_HASH_CRC32C:
-		if(__builtin_cpu_supports("sse4.2"))
+		if(__builtin_cpu_supports("sse4.2")) {
 			ret = bef_digest_crc32c(input, nbyte, output);
-		else
+		} else {
 			ret = -BEF_ERR_INVALINPUT;
+			fprintf(stderr,
+				"ERROR: CPU does not support CRC32C instructions\n");
+		}
 		break;
 #endif
 	case BEF_HASH_XXHASH:

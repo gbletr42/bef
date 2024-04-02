@@ -449,7 +449,7 @@ static int bef_digest_crc32c(const char *input, size_t nbyte, uint8_t *output)
 	uint64_t *buf = (uint64_t *) input;
 
 	for(; buf < input + nbyte; buf += 1)
-		_mm_crc32_u64(crc, *buf);
+		crc = _mm_crc32_u64(crc, *buf);
 
 	crc = htole64(crc);
 

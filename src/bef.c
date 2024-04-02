@@ -452,7 +452,7 @@ static int bef_digest_openssl(const char *input, uint8_t *output, size_t nbyte,
 	int ret = 0;
 	EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
 	unsigned int digest_len;
-	unsigned char digest[BEF_HASH_SIZE];
+	unsigned char digest[EVP_MAX_MD_SIZE];
 
 	if(mdctx == NULL) {
 		if(bef_vflag)
@@ -540,12 +540,20 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 		f_evp = &EVP_sha256;
 		ret = bef_digest_openssl(input, output, nbyte, f_evp);
 		break;
+	case BEF_HASH_SHA512:
+		f_evp = &EVP_sha512;
+		ret = bef_digest_openssl(input, output, nbyte, f_evp);
+		break;
 	case BEF_HASH_SHA3:
 		f_evp = &EVP_sha3_256;
 		ret = bef_digest_openssl(input, output, nbyte, f_evp);
 		break;
 	case BEF_HASH_BLAKE2S:
 		f_evp = &EVP_blake2s256;
+		ret = bef_digest_openssl(input, output, nbyte, f_evp);
+		break;
+	case BEF_HASH_BLAKE2B:
+		f_evp = &EVP_blake2b512;
 		ret = bef_digest_openssl(input, output, nbyte, f_evp);
 		break;
 	case BEF_HASH_MD5:

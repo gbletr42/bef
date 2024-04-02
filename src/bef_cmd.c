@@ -312,10 +312,14 @@ int main(int argc, char **argv) {
 				header.hash_t = BEF_HASH_SHA1;
 			} else if(strcmp(optarg, "sha256") == 0) {
 				header.hash_t = BEF_HASH_SHA256;
+			} else if(strcmp(optarg, "sha512") == 0) {
+				header.hash_t = BEF_HASH_SHA512;
 			} else if(strcmp(optarg, "sha3") == 0) {
 				header.hash_t = BEF_HASH_SHA3;
 			} else if(strcmp(optarg, "blake2s") == 0) {
 				header.hash_t = BEF_HASH_BLAKE2S;
+			} else if(strcmp(optarg, "blake2b") == 0) {
+				header.hash_t = BEF_HASH_BLAKE2B;
 			} else if(strcmp(optarg, "blake3") == 0) {
 				header.hash_t = BEF_HASH_BLAKE3;
 			} else if(strcmp(optarg, "md5") == 0) {

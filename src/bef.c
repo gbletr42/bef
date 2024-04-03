@@ -31,11 +31,10 @@
 #ifdef BEF_BLAKE3
 #include <blake3.h>
 #endif
-#ifdef BEF_ZLIB
-#include <zlib.h>
-#endif
-#ifdef BEF_ZLIB_NG
+#if defined BEF_ZLIB_NG
 #include <zlib-ng.h>
+#elif defined BEF_ZLIB
+#include <zlib.h>
 #endif
 #ifdef BEF_LIBERASURECODE
 #include <erasurecode.h>

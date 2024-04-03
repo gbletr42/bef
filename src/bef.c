@@ -34,6 +34,9 @@
 #ifdef BEF_ZLIB
 #include <zlib.h>
 #endif
+#ifdef BEF_ZLIB_NG
+#include <zlib-ng.h>
+#endif
 #ifdef BEF_LIBERASURECODE
 #include <erasurecode.h>
 #endif

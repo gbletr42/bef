@@ -36,6 +36,10 @@ AC_CHECK_HEADER([xxhash.h], [], [AC_MSG_ERROR(xxHash is a required dependency of
 dnl Enable Third Party packages
 AC_ARG_WITH([blake3], [AS_HELP_STRING([--with-blake3], [enable BLAKE3 support])], [AC_DEFINE([BEF_BLAKE3], 1, [enables BLAKE3 support]) AC_CHECK_HEADERS([blake3.h]) blake3=yes], [])
 AC_ARG_WITH([zlib], [AS_HELP_STRING([--with-zlib], [enable zlib support])], [AC_DEFINE([BEF_ZLIB], 1, [enables zlib support]) AC_CHECK_HEADERS([zlib.h]) zlib=yes], [])
+if test "$zlib" == "yes"
+then
+	AC_CHECK_HEADERS([zlib-ng.h], [AC_DEFINE([BEF_ZLIB_NG], 1, [enables zlib-ng support]) zlibng=yes])
+fi
 AC_ARG_WITH([openssl], [AS_HELP_STRING([--with-openssl], [enable OpenSSL support])], [AC_DEFINE([BEF_OPENSSL], 1, [enables OpenSSL support]) AC_CHECK_HEADERS([openssl/evp.h]) openssl=yes], [])
 AC_ARG_WITH([liberasurecode], [AS_HELP_STRING([--with-liberasurecode], [enable liberasurecode support])], [AC_DEFINE([BEF_LIBERASURECODE], 1, [enables liberasurecode support]) AC_CHECK_HEADERS([erasurecode.h]) erasurecode=yes], [])
 AC_ARG_WITH([cm256cc], [AS_HELP_STRING([--with-cm256cc], [enable cm256cc support])], [AC_DEFINE([BEF_CM256CC], 1, [enables cm256cc support]) cm256cc=yes], [])
@@ -51,6 +55,7 @@ AC_SYS_LARGEFILE
 dnl Conditionals for options
 AM_CONDITIONAL([BLAKE3], [test "$blake3" == "yes"])
 AM_CONDITIONAL([ZLIB], [test "$zlib" == "yes"])
+AM_CONDITIONAL([ZLIBNG], [test "$zlibng" == "yes"])
 AM_CONDITIONAL([OPENSSL], [test "$openssl" == "yes"])
 AM_CONDITIONAL([LIBERASURECODE], [test "$erasurecode" == "yes"])
 AM_CONDITIONAL([CM256CC], [test "$cm256cc" == "yes"])

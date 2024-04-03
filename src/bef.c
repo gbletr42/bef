@@ -418,8 +418,13 @@ static void bef_unprepare_fec_header(struct bef_fec_header *header)
 #ifdef BEF_ZLIB
 static int bef_digest_crc32(const char *input, size_t nbyte, uint8_t *output)
 {
+#ifndef BEF_ZLIB_NG
 	uLong crc = crc32(0L, Z_NULL, 0);
 	crc = crc32(crc, (const Bytef *) input, (uInt) nbyte);
+#else
+	uint32_t crc = zng_crc32(0, NULL, 0);
+	crc = zng_crc32(crc, input, (uint32_t) nbyte);
+#endif
 
 	/* Check sizes and convert endianness */
 	if(sizeof(crc) == sizeof(uint32_t)) {
@@ -592,7 +597,10 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 #endif
 #ifdef BEF_ZLIB
 	case BEF_HASH_CRC32:
-		ret = bef_digest_crc32(input, nbyte, output);
+		if(nbyte > UINT32_MAX)
+			fprintf(stderr, "ERROR: fragment size greater than UINT32_MAX for zlib CRC32\n");
+		else
+			ret = bef_digest_crc32(input, nbyte, output);
 		break;
 #endif
 #ifdef __x86_64__

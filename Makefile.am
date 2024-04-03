@@ -23,29 +23,41 @@ CXXFLAGS += $(CFLAGS)
 bin_PROGRAMS = bef
 bef_SOURCES = src/bef.c src/bef_cmd.c src/zfec.c
 bef_LDADD = -lxxhash
+
 if BLAKE3
 bef_LDADD += -lblake3
 endif
+
+if ZLIBNG
+bef_LDADD += -lz-ng
+else
 if ZLIB
 bef_LDADD += -lz
 endif
+endif
+
 if OPENSSL
 bef_LDADD += -lcrypto
 endif
+
 if LIBERASURECODE
 bef_LDADD += -lerasurecode
 endif
+
 if CM256CC
 bef_CXXFLAGS = $(CXXFLAGS) -DUSE_SSSE3 #won't build on Arch otherwise...
 bef_SOURCES += src/cm256.cc
 bef_LDADD += -lcm256cc -lstdc++
 endif
+
 if OPENFEC
 bef_LDADD += -lopenfec
 endif
+
 if LEOPARD
 bef_LDADD += -lleopard
 endif
+
 if WIREHAIR
 bef_LDADD += -lwirehair
 endif

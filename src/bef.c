@@ -2175,6 +2175,13 @@ static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
 {
 	int ret;
 
+	if(sbyte <= SIZE_MAX - 1) {
+		sbyte++;
+	} else {
+		fprintf(stderr, "ERROR: sbyte is somehow too large!\n");
+		return -BEF_ERR_OVERFLOW;
+	}
+
 	for(; sbyte > 0; sbyte--) {
 		ret = bef_verify_fragment(ibuf + *offset, header.nbyte,
 					  header.hash_t, BEF_VERIFY_FRAG_H);
@@ -2206,7 +2213,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 
 	for(offset = 0; offset < ibuf_s;) {
 		if(offset <= ibuf_s - header.nbyte)
-			sbyte = ibuf_s - offset;
+			sbyte = ibuf_s - header.nbyte - offset;
 		else
 			break;
 

@@ -73,10 +73,6 @@
 #define BEF_VERIFY_FRAG_H	0
 #define BEF_VERIFY_FRAG_B	1
 
-/* Fragment Scanning Flags */
-#define BEF_SCAN_FORWARDS	0
-#define BEF_SCAN_BACKWARDS	1
-
 /* Sky Padding Function Flags */
 #define BEF_SPAR_ENCODE		0
 #define BEF_SPAR_DECODE		1
@@ -2175,20 +2171,9 @@ static int bef_deconstruct_header(int input, struct bef_real_header *header)
  * we can't will lead to a buffer overflow
  */
 static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
-			     uint8_t flag, struct bef_real_header header)
+			     struct bef_real_header header)
 {
 	int ret;
-
-	/* First test current offset, as this may be a well-crafted file */
-	ret = bef_verify_fragment(ibuf + *offset, header.nbyte, header.hash_t,
-				  BEF_VERIFY_FRAG_H);
-	if(ret == 0)
-		return 0;
-
-	if(flag == BEF_SCAN_BACKWARDS) {
-		*offset -= sbyte;
-		sbyte *= 2;
-	}
 
 	for(; sbyte > 0; sbyte--) {
 		ret = bef_verify_fragment(ibuf + *offset, header.nbyte,
@@ -2201,7 +2186,7 @@ static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
 
 	if(bef_vflag > 1)
 		fprintf(stderr,
-			"ERROR: fragment not found within scan distance\n");
+			"ERROR: fragment not found within given buffer\n");
 
 	return -BEF_ERR_NEEDMORE;
 }
@@ -2209,49 +2194,47 @@ static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
 static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 				     uint32_t *index,
 				     uint64_t *pbyte, size_t *ahead,
-				     uint64_t il_count, uint64_t sbyte,
+				     uint64_t il_count,
 				     struct bef_real_header header)
 {
 	int ret;
 	uint16_t i;
-	uint8_t flag = BEF_SCAN_FORWARDS;
 	struct bef_frag_header frag_h;
 	size_t offset;
+	uint64_t sbyte;
 	memset(index, '\0', header.il_n * sizeof(*index));
 
-	for(offset = 0; offset < ibuf_s; offset += header.nbyte) {
-		if(offset > ibuf_s - (sbyte + header.nbyte)) {
-			if(offset <= ibuf_s - header.nbyte)
-				sbyte = ibuf_s - header.nbyte - offset;
-			else
-				break;
-		}
+	for(offset = 0; offset < ibuf_s;) {
+		if(offset <= ibuf_s - header.nbyte)
+			sbyte = ibuf_s - offset;
+		else
+			break;
 
-		ret = bef_scan_fragment(ibuf, &offset, sbyte, flag, header);
-		if(ret != 0) {
-			flag = BEF_SCAN_BACKWARDS;
-			continue; //Keep on searching
-		}
+		ret = bef_scan_fragment(ibuf, &offset, sbyte, header);
+		if(ret != 0)
+			break;
 
 		memcpy(&frag_h, ibuf + offset, sizeof(frag_h));
 		bef_unprepare_frag_header(&frag_h);
 
 		/* Check if it's outside our range, and if so break out of the
-		 * loop
+		 * loop. Keep going if its a prior block (poor fella got left
+		 * out ;_;)
 		 */
-		if(frag_h.block_num >= il_count * header.il_n ||
-		   frag_h.block_num < il_count * header.il_n - header.il_n)
+		if(frag_h.block_num >= il_count * header.il_n) {
 			break;
+		} else if(frag_h.block_num <
+			  il_count * header.il_n - header.il_n) {
+			offset++; //Don't wanna infinite loop
+			continue;
+		}
 
 		if(frag_h.pbyte > 0 && *pbyte == 0)
 			*pbyte = frag_h.pbyte;
 
 		ret = bef_verify_fragment(ibuf + offset, header.nbyte,
 					  header.hash_t, BEF_VERIFY_FRAG_B);
-		if(ret != 0) {
-			flag = BEF_SCAN_BACKWARDS;
-		} else {
-			flag = BEF_SCAN_FORWARDS;
+		if(ret == 0) {
 			i = frag_h.block_num % header.il_n;
 
 			if(index[i] < (uint32_t) header.k + header.m) {
@@ -2259,6 +2242,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 				index[i] += 1;
 			}
 		}
+		offset += header.nbyte;
 	}
 
 	*ahead = ibuf_s - offset;
@@ -2281,7 +2265,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 				  char **obuf, size_t *obuf_s,
 				  uint64_t *pbyte, size_t *ahead,
-				  uint64_t il_count, uint64_t sbyte,
+				  uint64_t il_count,
 				  struct bef_real_header header)
 {
 	int ret;
@@ -2301,7 +2285,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	}
 
 	ret = bef_deconstruct_fragments(ibuf, ibuf_s, index,
-					pbyte, ahead, il_count, sbyte, header);
+					pbyte, ahead, il_count, header);
 	if(ret != 0)
 		goto out;
 
@@ -2456,25 +2440,17 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 		return ret;
 
 	if(sbyte == 0) {
-		sbyte = header.nbyte - 1;
+		sbyte = 1024 * header.il_n * ((uint32_t) header.k + header.m);
 		if(bef_vflag)
-			fprintf(stderr, "Setting sbyte to default value %lu (one less than fragment size)\n",
+			fprintf(stderr, "Setting sbyte to default value %lu (1024 per fragment)\n",
 				sbyte);
-	} else if(sbyte >= header.nbyte) { //Funky things happen otherwise
-		if(bef_vflag)
-			fprintf(stderr,
-				"WARNING: sbyte given (%lu) is above fragment size, setting to one less than fragment size %lu\n",
-				sbyte, header.nbyte - 1);
-		sbyte = header.nbyte - 1;
 	}
-
-	sbyte *= (size_t) header.il_n * ((uint32_t) header.k + header.m);
 
 	if(header.nbyte >=
 	   (UINT64_MAX - sbyte) / (((uint32_t) header.k + header.m) * header.il_n)) {
 		if(bef_vflag)
 			fprintf(stderr,
-				"ERROR: Fragment size is greater than max (UINT64_MAX / number of fragments\n");
+				"ERROR: Fragment size is greater than max (UINT64_MAX - sbyte) / number of fragments\n");
 		return -BEF_ERR_INVALINPUT;
 	}
 
@@ -2486,7 +2462,6 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	else
 		ibuf_s += header.nbyte;
 	ibuf_s = (ibuf_s / header.nbyte) * header.nbyte;
-	sbyte /= (size_t) header.il_n * ((uint32_t) header.k + header.m);
 	ibuf = bef_malloc(ibuf_s);
 
 	/* Allocate our work arrays */
@@ -2510,7 +2485,7 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 			break;
 
 		ret = bef_deconstruct_blocks(ibuf, ibuf_s, &obuf, &obuf_s,
-					     &pbyte, &ahead, il_count, sbyte,
+					     &pbyte, &ahead, il_count,
 					     header);
 		if(ret != 0)
 			goto out;

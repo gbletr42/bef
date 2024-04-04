@@ -2220,13 +2220,20 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	memset(index, '\0', header.il_n * sizeof(*index));
 
 	for(offset = 0; offset < ibuf_s; offset += header.nbyte) {
-		if(offset < ibuf_s - (sbyte + header.nbyte)) {
+		if(offset <= ibuf_s - (sbyte + header.nbyte)) {
 			ret = bef_scan_fragment(ibuf, &offset, sbyte, flag,
 						header);
-			if(ret != 0) {
-				flag = BEF_SCAN_BACKWARDS;
-				continue; //Keep on searching
-			}
+		} else if(offset <= ibuf_s - header.nbyte) {
+			sbyte = ibuf_s - header.nbyte - offset;
+			ret = bef_scan_fragment(ibuf, &offset, sbyte, flag,
+						header);
+		} else {
+			break; //Buffer is smaller than fragment size!
+		}
+
+		if(ret != 0) {
+			flag = BEF_SCAN_BACKWARDS;
+			continue; //Keep on searching
 		}
 
 		memcpy(&frag_h, ibuf + offset, sizeof(frag_h));

@@ -1092,79 +1092,62 @@ static int bef_encode_wirehair(const char *input, size_t inbyte, char **data,
  * The given block number for that NULL element will be UINT32_MAX, something
  * a 16bit number like k or k+m could never reach.
  *
- * Returns the number of fragments not found (and replaced with recoveries)
+ * Returns the number of fragments not found
  */
 static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 				       char **recon_arr, uint32_t *block_nums,
 				       uint32_t k, uint16_t m,
 				       uint8_t flag)
 {
-	uint32_t ret = 0;
 	uint32_t bound = k;
 	uint32_t found = 0;
 	uint16_t counter = 0;
-	uint16_t stack[m];
+	uint32_t stack[m];
 	struct bef_fec_header header;
 
 	if(flag == BEF_RECON_NULL)
 		bound = k + m;
 
-	for(uint32_t i = 0; i + found < k + m;) {
+	/* Assume none are found */
+	memset(recon_arr, NULL, bound * sizeof(*recon_arr));
+	memset(block_nums, UINT32_MAX, bound * sizeof(*block_nums));
+
+	/* First pass places block numbers in their given indice and, if outside
+	 * the indice but with the bounds of k + m, places it in the stack.
+	 */
+	for(uint32_t i = 0; i < frag_len; i++) {
 		memcpy(&header, *(frags + i), sizeof(header));
-		bef_unprepare_fec_header(&header);
+		*(frags + i) += sizeof(header);
 
-		if(header.block_num != i + found) {
-			if(i + found < bound) {
-				if(flag == BEF_RECON_NULL) {
-					recon_arr[i + found] = NULL;
-					block_nums[i + found] = UINT32_MAX;
-				} else {
-					stack[counter++] = i + found;
-					ret++;
-				}
-			}
-
-			found++;
-			i--; //Keep going until we get to the correct index
-		} else {
-			/* Do our evil pointer arithmetic hackery again */
-			*(frags + i) += sizeof(header);
-
-			if(header.block_num < bound && i + found < bound) {
-				recon_arr[header.block_num] = *(frags + i);
-				block_nums[header.block_num] = header.block_num;
-			} else if(counter > 0) {
-				recon_arr[stack[--counter]] = *(frags + i);
-				block_nums[stack[counter]] = header.block_num;
-			}
-
-			/* Undo our evil pointer arithmetic hackery */
-			*(frags + i) -= sizeof(header);
+		if(header.block_num < bound) {
+			recon_arr[header.block_num] = *(frags + i);
+			block_nums[header.block_num] = header.block_num;
+		} else if(header.block_num < k + m && counter < m) {
+			stack[counter++] = i;
 		}
 
-		/* Keep adding i if it is in range or has overflowed
-		 * Since k+m can be at most 17 bits, it cannot reach UINT32_MAX
-		 * unless it has overflowed when decrementing from i = 0
-		 *
-		 * When we have reached the end of the array, increment found as
-		 * it indicates there are missing tail fragments. If flag does
-		 * not contain BEF_RECON_NULL, and counter is equal to 0, then
-		 * we end the loop's condition by setting found equal to the
-		 * difference between i and k + m.
-		 */
-		if(i < frag_len - 1 || i == UINT32_MAX)
-			i++;
-		else if(i == frag_len - 1 &&
-			(counter > 0 || flag == BEF_RECON_NULL))
-			found++;
-		else if(i == frag_len - 1 && counter == 0)
-			found = k + m - i;
+		*(frags + i) -= sizeof(header);
 	}
 
-	if(flag == BEF_RECON_NULL)
-		return found;
-	else
-		return ret;
+	/* Second pass records number not found, and if BEF_RECON_REPLACE is
+	 * given, replaces not found items with the next fragment on the
+	 * stack
+	 */
+	for(uint32_t i = 0; i < bound; i++) {
+		if(recon_arr[i] == NULL) {
+			found++;
+			if(flag == BEF_RECON_REPLACE && counter > 0) {
+				memcpy(&header, *(frags + stack[--counter]),
+				       sizeof(header));
+				*(frags + stack[counter]) += sizeof(header);
+				recon_arr[i] = *(frags + stack[counter]);
+				block_nums[i] = header.block_num;
+				*(frags + stack[counter]) -= sizeof(header);
+			}
+		}
+	}
+
+	return found;
 }
 
 #ifdef BEF_LIBERASURECODE
@@ -1682,6 +1665,12 @@ int bef_decode_ecc(char **frags, uint32_t frag_len, size_t frag_b,
 		if(bef_vflag)
 			fprintf(stderr,
 				"ERROR: Number of fragments is 0\n");
+		return -BEF_ERR_INVALINPUT;
+	} else if(frag_len >= (uint32_t) header.k + header.m) {
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: Too many fragments (%u) given, max is k + m (%u)\n",
+				frag_len, (uint32_t) header.k + header.m);
 		return -BEF_ERR_INVALINPUT;
 	}
 

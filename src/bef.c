@@ -1666,7 +1666,7 @@ int bef_decode_ecc(char **frags, uint32_t frag_len, size_t frag_b,
 			fprintf(stderr,
 				"ERROR: Number of fragments is 0\n");
 		return -BEF_ERR_INVALINPUT;
-	} else if(frag_len >= (uint32_t) header.k + header.m) {
+	} else if(frag_len > (uint32_t) header.k + header.m) {
 		if(bef_vflag)
 			fprintf(stderr,
 				"ERROR: Too many fragments (%u) given, max is k + m (%u)\n",

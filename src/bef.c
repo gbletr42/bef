@@ -2220,17 +2220,14 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	memset(index, '\0', header.il_n * sizeof(*index));
 
 	for(offset = 0; offset < ibuf_s; offset += header.nbyte) {
-		if(offset <= ibuf_s - (sbyte + header.nbyte)) {
-			ret = bef_scan_fragment(ibuf, &offset, sbyte, flag,
-						header);
-		} else if(offset <= ibuf_s - header.nbyte) {
-			sbyte = ibuf_s - header.nbyte - offset;
-			ret = bef_scan_fragment(ibuf, &offset, sbyte, flag,
-						header);
-		} else {
-			break; //Buffer is smaller than fragment size!
+		if(offset > ibuf_s - (sbyte + header.nbyte)) {
+			if(offset <= ibuf_s - header.nbyte)
+				sbyte = ibuf_s - header.nbyte - offset;
+			else
+				break;
 		}
 
+		ret = bef_scan_fragment(ibuf, &offset, sbyte, flag, header);
 		if(ret != 0) {
 			flag = BEF_SCAN_BACKWARDS;
 			continue; //Keep on searching
@@ -2499,15 +2496,18 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	while(1) {
 		bret = bef_safe_rw(input, ibuf + ahead,
 				   ibuf_s - ahead, BEF_SAFE_READ);
-		if(bret == 0) {
-			if(ahead == 0)
-				break; //Read it all folks!
-			else
-				ibuf_s = ahead;
+		if(bret == 0 && ahead == 0) {
+			break; //Read it all folks!
 		} else if(bret == -1) {
 			ret = -BEF_ERR_READERR;
 			goto out;
+		} else if(ahead + bret < ibuf_s) {
+			ibuf_s = ahead + bret;
 		}
+
+		/* Check if we even have enough data... */
+		if(ibuf_s < header.nbyte * header.il_n * header.k)
+			break;
 
 		ret = bef_deconstruct_blocks(ibuf, ibuf_s, &obuf, &obuf_s,
 					     &pbyte, &ahead, il_count, sbyte,

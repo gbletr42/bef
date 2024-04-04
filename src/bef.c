@@ -2216,15 +2216,17 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	uint16_t i;
 	uint8_t flag = BEF_SCAN_FORWARDS;
 	struct bef_frag_header frag_h;
-	size_t offset = 0;
+	size_t offset;
 	memset(index, '\0', header.il_n * sizeof(*index));
 
-	for(; offset < ibuf_s - (sbyte + header.nbyte);
-	    offset += header.nbyte) {
-		ret = bef_scan_fragment(ibuf, &offset, sbyte, flag, header);
-		if(ret != 0) {
-			flag = BEF_SCAN_BACKWARDS;
-			continue; //Keep on searching
+	for(offset = 0; offset < ibuf_s; offset += header.nbyte) {
+		if(offset < ibuf_s - (sbyte + header.nbyte)) {
+			ret = bef_scan_fragment(ibuf, &offset, sbyte, flag,
+						header);
+			if(ret != 0) {
+				flag = BEF_SCAN_BACKWARDS;
+				continue; //Keep on searching
+			}
 		}
 
 		memcpy(&frag_h, ibuf + offset, sizeof(frag_h));
@@ -2490,7 +2492,7 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	while(1) {
 		bret = bef_safe_rw(input, ibuf + ahead,
 				   ibuf_s - ahead, BEF_SAFE_READ);
-		if(bret == 0) {
+		if(bret == 0 && ahead == 0) {
 			break; //Read it all folks!
 		} else if(bret == -1) {
 			ret = -BEF_ERR_READERR;

@@ -421,7 +421,7 @@ static int bef_digest_crc32(const char *input, size_t nbyte, uint8_t *output)
 	crc = crc32(crc, (const Bytef *) input, (uInt) nbyte);
 #else
 	uint32_t crc = zng_crc32(0, NULL, 0);
-	crc = zng_crc32(crc, input, (uint32_t) nbyte);
+	crc = zng_crc32(crc, (const uint8_t *) input, (uint32_t) nbyte);
 #endif
 
 	/* Check sizes and convert endianness */
@@ -451,7 +451,7 @@ static int bef_digest_crc32c(const char *input, size_t nbyte, uint8_t *output)
 	uint64_t crc = 0;
 	uint64_t *buf = (uint64_t *) input;
 
-	for(; buf < input + nbyte; buf += 1)
+	for(; (const char *) buf < input + nbyte; buf += 1)
 		crc = _mm_crc32_u64(crc, *buf);
 
 	crc = htole64(crc);

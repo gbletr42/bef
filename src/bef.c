@@ -2499,8 +2499,11 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	while(1) {
 		bret = bef_safe_rw(input, ibuf + ahead,
 				   ibuf_s - ahead, BEF_SAFE_READ);
-		if(bret == 0 && ahead == 0) {
-			break; //Read it all folks!
+		if(bret == 0) {
+			if(ahead == 0)
+				break; //Read it all folks!
+			else
+				ibuf_s = ahead;
 		} else if(bret == -1) {
 			ret = -BEF_ERR_READERR;
 			goto out;

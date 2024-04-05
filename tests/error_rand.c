@@ -14,19 +14,24 @@ int main() {
 	while(fread(in, 4096, 1, stdin) != 0) {
 		/* Corrupt one byte */
 		getrandom(&i, sizeof(i), 0);
-		if(i % ITER == 0)
+		if(i % ITER == 0) {
+			getrandom(&i, sizeof(i), 0);
 			in[i % 4096] = '\0';
+		}
 		/* Add random noise */
 		getrandom(&i, sizeof(i), 0);
 		if(i % ITER == 0) {
+			getrandom(&i, sizeof(i), 0);
 			getrandom(noise, sizeof(noise), 0);
 			fwrite(noise, i % 4096, 1, stdout);
 		}
 		/* Lose output (at least one byte worth) */
 		getrandom(&i, sizeof(i), 0);
-		if(i % ITER != 0)
+		if(i % ITER != 0) {
 			fwrite(in, 4096, 1, stdout);
-		else
+		} else {
+			getrandom(&i, sizeof(i), 0);
 			fwrite(in, i % 4095, 1, stdout);
+		}
 	}
 }

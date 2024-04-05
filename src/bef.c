@@ -2218,8 +2218,10 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 				       header.nbyte - sizeof(frag_h));
 				index[i] += 1;
 			}
+			offset += header.nbyte;
+		} else {
+			offset++;
 		}
-		offset += header.nbyte;
 	}
 
 	*ahead = ibuf_s - offset;

@@ -1944,6 +1944,67 @@ out:
 	return ret;
 }
 
+static int bef_construct_init(char **ibuf, size_t *ibuf_s, uint64_t *bsize,
+			      struct bef_real_header *header)
+{
+	int ret;
+
+	if(*bsize == 0) {
+		*bsize = BEF_BSIZE;
+		if(bef_vflag)
+			fprintf(stderr, "Setting block size to default %lu\n",
+				*bsize);
+	}
+	if(header->par_t == 0) {
+		header->par_t = BEF_PAR_DEFAULT;
+		if(bef_vflag)
+			fprintf(stderr,
+				"Setting parity type to default fec-vand\n");
+	}
+	if(header->hash_t == 0) {
+		header->hash_t = BEF_HASH_DEFAULT;
+		if(bef_vflag)
+			fprintf(stderr,
+				"Setting hash type to default xxhash\n");
+	}
+	if(header->k == 0) {
+		header->k = BEF_K_DEFAULT;
+		if(bef_vflag)
+			fprintf(stderr, "Setting k to default %u\n", header->k);
+	}
+	if(header->m == 0) {
+		header->m = BEF_M_DEFAULT;
+		if(bef_vflag)
+			fprintf(stderr, "Setting m to default %u\n", header->m);
+	}
+	if(header->il_n == 0) {
+		header->il_n = BEF_IL_N_DEFAULT;
+		if(bef_vflag)
+			fprintf(stderr, "Setting il_n to default %u\n",
+				header->il_n);
+	}
+
+#ifdef _OPENMP
+	if(bef_numT == 0) {
+		if(header->il_n <= omp_get_num_procs())
+			bef_numT = header->il_n;
+		else
+			bef_numT = omp_get_num_procs();
+	}
+#endif
+
+	ret = bef_init(*header);
+	if(ret != 0)
+		return ret;
+
+	/* Estimate size of our shared input buffer, using bsize and k */
+	*ibuf_s = header->il_n * *bsize;
+	*ibuf_s += bef_sky_padding(*ibuf_s, header->il_n, header->k, *bsize);
+	*ibuf = bef_malloc(*ibuf_s);
+
+	return 0;
+}
+
 /* Our lovely file constructor! Split in two parts ^_^ */
 int bef_construct(int input, int output, uint64_t bsize,
 		  struct bef_real_header header)
@@ -1955,61 +2016,11 @@ int bef_construct(int input, int output, uint64_t bsize,
 	struct bef_header head;
 	size_t lret;
 
-	if(bsize == 0) {
-		bsize = BEF_BSIZE;
-		if(bef_vflag)
-			fprintf(stderr, "Setting block size to default %lu\n",
-				bsize);
-	}
-	if(header.par_t == 0) {
-		header.par_t = BEF_PAR_DEFAULT;
-		if(bef_vflag)
-			fprintf(stderr,
-				"Setting parity type to default fec-vand\n");
-	}
-	if(header.hash_t == 0) {
-		header.hash_t = BEF_HASH_DEFAULT;
-		if(bef_vflag)
-			fprintf(stderr,
-				"Setting hash type to default xxhash\n");
-	}
-	if(header.k == 0) {
-		header.k = BEF_K_DEFAULT;
-		if(bef_vflag)
-			fprintf(stderr, "Setting k to default %u\n", header.k);
-	}
-	if(header.m == 0) {
-		header.m = BEF_M_DEFAULT;
-		if(bef_vflag)
-			fprintf(stderr, "Setting m to default %u\n", header.m);
-	}
-	if(header.il_n == 0) {
-		header.il_n = BEF_IL_N_DEFAULT;
-		if(bef_vflag)
-			fprintf(stderr, "Setting il_n to default %u\n",
-				header.il_n);
-	}
-
-#ifdef _OPENMP
-	if(bef_numT == 0) {
-		if(header.il_n <= omp_get_num_procs())
-			bef_numT = header.il_n;
-		else
-			bef_numT = omp_get_num_procs();
-	}
-#endif
-
-	ret = bef_init(header);
+	ret = bef_construct_init(&ibuf, &ibuf_s, &bsize, &header);
 	if(ret != 0)
 		return ret;
 
-	/* Estimate size of our shared input buffer, using bsize and k */
-	ibuf_s = header.il_n * bsize;
-	ibuf_s += bef_sky_padding(ibuf_s, header.il_n, header.k, bsize);
-	ibuf = bef_malloc(ibuf_s);
-
 	head.header = header;
-
 	ret = bef_construct_header(input, &ibuf, &ibuf_s, &bsize, &lret,
 				   &head);
 	if(ret != 0)
@@ -2321,97 +2332,89 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	return ret;
 }
 
-int bef_deconstruct(int input, int output, struct bef_real_header header,
-		    size_t sbyte)
+static int bef_deconstruct_init(int input,
+				char **ibuf, size_t *ibuf_s,
+				struct bef_real_header *header)
 {
-	int ret = 0;
-	ssize_t bret;
-	char *ibuf = NULL;
-	char *obuf = NULL;
-	size_t ibuf_s;
-	size_t obuf_s = 0; //Not known yet
-	uint64_t pbyte = 0;
-	size_t ahead = 0; //Number of bytes read ahead, when scanning.
-	uint32_t *index = bef_malloc(header.il_n * sizeof(*index));
-	uint64_t il_count = 1; //Number of interleaved sets we've gone through
+	int ret;
 
 	if(bef_rflag == 0) {
 		/* Get our header and verify its sanity */
-		ret = bef_deconstruct_header(input, &header);
+		ret = bef_deconstruct_header(input, header);
 		if(ret != 0)
 			return -BEF_ERR_INVALINPUT;
 
-		if(header.k == 0) {
+		if(header->k == 0) {
 			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: Invalid k value in header\n");
 			return -BEF_ERR_INVALINPUT;
 		}
-		if(header.nbyte == 0) {
+		if(header->nbyte == 0) {
 			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: Invalid fragment size in header\n");
 			return -BEF_ERR_INVALINPUT;
 		}
-		if(header.il_n == 0) {
+		if(header->il_n == 0) {
 			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: Invalid il_n value in header\n");
 			return -BEF_ERR_INVALINPUT;
 		}
-		if(header.m == 0) {
+		if(header->m == 0) {
 			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: Invalid m value in header\n");
 			return -BEF_ERR_INVALINPUT;
 		}
-		if(header.par_t == 0) {
+		if(header->par_t == 0) {
 			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: Invalid parity type in header\n");
 			return -BEF_ERR_INVALINPUT;
 		}
-		if(header.hash_t == 0) {
+		if(header->hash_t == 0) {
 			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: Invalid hash type in header\n");
 			return -BEF_ERR_INVALINPUT;
 		}
 	} else {
-		if(header.k == 0) {
-			header.k = BEF_K_DEFAULT;
+		if(header->k == 0) {
+			header->k = BEF_K_DEFAULT;
 			if(bef_vflag)
 				fprintf(stderr,
 					"Setting k to default value %u\n",
-					header.k);
+					header->k);
 		}
-		if(header.m == 0) {
-			header.m = BEF_M_DEFAULT;
+		if(header->m == 0) {
+			header->m = BEF_M_DEFAULT;
 			if(bef_vflag)
 				fprintf(stderr,
 					"Setting m to default value %u\n",
-					header.m);
+					header->m);
 		}
-		if(header.il_n == 0) {
-			header.il_n = BEF_IL_N_DEFAULT;
+		if(header->il_n == 0) {
+			header->il_n = BEF_IL_N_DEFAULT;
 			if(bef_vflag)
 				fprintf(stderr,
 					"Setting il_n to default value %u\n",
-					header.il_n);
+					header->il_n);
 		}
-		if(header.par_t == 0) {
-			header.par_t = BEF_PAR_DEFAULT;
+		if(header->par_t == 0) {
+			header->par_t = BEF_PAR_DEFAULT;
 			if(bef_vflag)
 				fprintf(stderr,
 					"Setting parity type to default fec-vand\n");
 		}
-		if(header.hash_t == 0) {
-			header.hash_t = BEF_HASH_DEFAULT;
+		if(header->hash_t == 0) {
+			header->hash_t = BEF_HASH_DEFAULT;
 			if(bef_vflag)
 				fprintf(stderr,
 					"Setting hash type to default xxhash\n");
 		}
-		if(header.nbyte == 0) {
+		if(header->nbyte == 0) {
 			if(bef_vflag)
 				fprintf(stderr,
 					"ERROR: fragment size must be greater than 0\n");
@@ -2421,19 +2424,19 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 
 #ifdef _OPENMP
 	if(bef_numT == 0) {
-		if(header.il_n <= omp_get_num_procs())
-			bef_numT = header.il_n;
+		if(header->il_n <= omp_get_num_procs())
+			bef_numT = header->il_n;
 		else
 			bef_numT = omp_get_num_procs();
 	}
 #endif
 
-	ret = bef_init(header);
+	ret = bef_init(*header);
 	if(ret != 0)
 		return ret;
 
-	if(header.nbyte >=
-	   UINT64_MAX / (((uint32_t) header.k + header.m) * header.il_n)) {
+	if(header->nbyte >=
+	   UINT64_MAX / (((uint32_t) header->k + header->m) * header->il_n)) {
 		if(bef_vflag)
 			fprintf(stderr,
 				"ERROR: Fragment size is greater than max UINT64_MAX / number of fragments\n");
@@ -2441,18 +2444,68 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	}
 
 	/* Allocate our buffers */
-	ibuf_s = ((uint32_t) header.k + header.m) * header.nbyte * header.il_n;
-	ibuf = bef_malloc(ibuf_s);
+	*ibuf_s = ((uint32_t) header->k + header->m);
+	*ibuf_s *= header->nbyte * header->il_n;
+	*ibuf = bef_malloc(*ibuf_s);
 
 	/* Allocate our work arrays */
-	bef_construct_alloc(header.nbyte - sizeof(struct bef_frag_header),
-			    (uint32_t) header.k + header.m, header.il_n);
+	bef_construct_alloc(header->nbyte - sizeof(struct bef_frag_header),
+			    (uint32_t) header->k + header->m, header->il_n);
+
+	return 0;
+}
+
+static int bef_deconstruct_set(int output, char *ibuf, size_t ibuf_s,
+			       char **obuf, size_t *obuf_s, uint64_t *ahead,
+			       uint32_t *index, uint64_t il_count,
+			       struct bef_real_header header)
+{
+	int ret;
+	ssize_t bret;
+	uint64_t pbyte = 0;
+
+	ret = bef_deconstruct_blocks(ibuf, ibuf_s, obuf, obuf_s, &pbyte,
+				     ahead, il_count, index, header);
+	if(ret != 0)
+		return ret;
+
+	/* Check for integer overflow */
+	if(*obuf_s - pbyte > *obuf_s){//Impossible, unless overflowed
+		if(bef_vflag)
+			fprintf(stderr,
+				"ERROR: padded bytes overflowed\n");
+		return -BEF_ERR_OVERFLOW;
+	}
+
+	bret = bef_safe_rw(output, *obuf, *obuf_s - pbyte, BEF_SAFE_WRITE);
+	if(bret != *obuf_s - pbyte)
+		return -BEF_ERR_WRITEERR;
+
+	return 0;
+}
+
+static int bef_deconstruct_sets(int input, int output, char *ibuf,
+				size_t ibuf_s, struct bef_real_header header)
+{
+	int ret =0;
+	ssize_t bret;
+	char *obuf = NULL;
+	size_t obuf_s = 0;
+	uint64_t ahead = 0;
+	uint64_t il_count = 1;
+	uint32_t *index = bef_calloc(header.il_n, sizeof(*index));
 
 	/* Another eternal read loop incoming */
 	while(1) {
-		bret = bef_safe_rw(input, ibuf + ahead,
-				   ibuf_s - ahead, BEF_SAFE_READ);
-		if(bret == 0 && ahead == 0) {
+		bret = bef_safe_rw(input, ibuf + ahead, ibuf_s - ahead,
+				   BEF_SAFE_READ);
+		if(bret == 0 && ahead <= header.nbyte) {
+			/* Flush out any remaining fragments */
+			if(ret == -BEF_ERR_NEEDMORE)
+				ret = bef_deconstruct_set(output, ibuf,
+							  ahead, &obuf, &obuf_s,
+							  &ahead, index,
+							  il_count, header);
 			break; //Read it all folks!
 		} else if(bret == -1) {
 			ret = -BEF_ERR_READERR;
@@ -2461,16 +2514,11 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 			ibuf_s = ahead + bret;
 		}
 
-		/* Check if we even have enough data... */
-		if(ibuf_s < header.nbyte)
-			break;
-
 		ahead = ibuf_s;
 		while(ahead >= header.nbyte) {
-			ret = bef_deconstruct_blocks(ibuf, ibuf_s, &obuf,
-						     &obuf_s, &pbyte, &ahead,
-						     il_count, index,
-						     header);
+			ret = bef_deconstruct_set(output, ibuf, ibuf_s,
+						  &obuf, &obuf_s, &ahead, index,
+						  il_count, header);
 			if(ret == -BEF_ERR_NEEDMORE) {
 				if(ahead <= header.nbyte) {
 					break;
@@ -2485,24 +2533,8 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 				goto out;
 			}
 
-			/* Check for integer overflow */
-			if(obuf_s - pbyte > obuf_s){//Impossible, unless overflowed
-				ret = -BEF_ERR_OVERFLOW;
-				if(bef_vflag)
-					fprintf(stderr,
-						"ERROR: padded bytes overflowed\n");
-				goto out;
-			}
-
-			bret = bef_safe_rw(output, obuf, obuf_s - pbyte,
-					   BEF_SAFE_WRITE);
-			if(bret != obuf_s - pbyte) {
-				ret = -BEF_ERR_WRITEERR;
-				goto out;
-			}
-
-			il_count++;
 			memset(index, '\0', header.il_n * sizeof(*index));
+			il_count++;
 		}
 
 		/* Copy over input that was read ahead */
@@ -2510,11 +2542,31 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 			memmove(ibuf, ibuf + ibuf_s - ahead, ahead);
 	}
 
+	if(ahead > 0)
+		if(bef_vflag)
+			fprintf(stderr, "WARNING: Excess data at EOF, file may have been truncated\n");
+
 out:
+	free(index);
+	free(obuf);
+	return ret;
+}
+
+int bef_deconstruct(int input, int output, struct bef_real_header header,
+		    size_t sbyte)
+{
+	int ret = 0;
+	char *ibuf = NULL;
+	size_t ibuf_s;
+
+	ret = bef_deconstruct_init(input, &ibuf, &ibuf_s, &header);
+	if(ret != 0)
+		return ret;
+
+	ret = bef_deconstruct_sets(input, output, ibuf, ibuf_s, header);
+
 	bef_destroy(header);
 	bef_construct_free(header.il_n);
-	free(obuf);
-	free(index);
 	free(ibuf);
 	return ret;
 }

@@ -2460,27 +2460,26 @@ static int bef_deconstruct_init(int input,
 static int bef_deconstruct_set(int output, char *ibuf, size_t ibuf_s,
 			       char **obuf, size_t *obuf_s, uint64_t *ahead,
 			       uint32_t *index, uint64_t il_count,
-			       struct bef_real_header header)
+			       uint64_t *pbyte, struct bef_real_header header)
 {
 	int ret;
 	ssize_t bret;
-	uint64_t pbyte = 0;
 
-	ret = bef_deconstruct_blocks(ibuf, ibuf_s, obuf, obuf_s, &pbyte,
+	ret = bef_deconstruct_blocks(ibuf, ibuf_s, obuf, obuf_s, pbyte,
 				     ahead, il_count, index, header);
 	if(ret != 0)
 		return ret;
 
 	/* Check for integer overflow */
-	if(*obuf_s - pbyte > *obuf_s){//Impossible, unless overflowed
+	if(*obuf_s - *pbyte > *obuf_s){//Impossible, unless overflowed
 		if(bef_vflag)
 			fprintf(stderr,
 				"ERROR: padded bytes overflowed\n");
 		return -BEF_ERR_OVERFLOW;
 	}
 
-	bret = bef_safe_rw(output, *obuf, *obuf_s - pbyte, BEF_SAFE_WRITE);
-	if(bret != *obuf_s - pbyte)
+	bret = bef_safe_rw(output, *obuf, *obuf_s - *pbyte, BEF_SAFE_WRITE);
+	if(bret != *obuf_s - *pbyte)
 		return -BEF_ERR_WRITEERR;
 
 	return 0;
@@ -2495,6 +2494,7 @@ static int bef_deconstruct_sets(int input, int output, char *ibuf,
 	size_t obuf_s = 0;
 	uint64_t ahead = 0;
 	uint64_t il_count = 1;
+	uint64_t pbyte = 0;
 	uint32_t *index = bef_calloc(header.il_n, sizeof(*index));
 
 	/* Another eternal read loop incoming */
@@ -2507,7 +2507,8 @@ static int bef_deconstruct_sets(int input, int output, char *ibuf,
 				ret = bef_deconstruct_set(output, ibuf,
 							  ahead, &obuf, &obuf_s,
 							  &ahead, index,
-							  il_count, header);
+							  il_count, &pbyte,
+							  header);
 			break; //Read it all folks!
 		} else if(bret == -1) {
 			ret = -BEF_ERR_READERR;
@@ -2520,7 +2521,7 @@ static int bef_deconstruct_sets(int input, int output, char *ibuf,
 		while(ahead >= header.nbyte) {
 			ret = bef_deconstruct_set(output, ibuf, ibuf_s,
 						  &obuf, &obuf_s, &ahead, index,
-						  il_count, header);
+						  il_count, &pbyte, header);
 			if(ret == -BEF_ERR_NEEDMORE) {
 				if(ahead <= header.nbyte) {
 					break;

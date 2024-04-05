@@ -15,12 +15,7 @@ do
 		fi
 	done
 
-	bef -c -P $parity -i test3 -o test3.bef
-	for((i = 1; i < 800; i++))
-	do
-		dd if=/dev/zero of=test3.bef seek=$(($i * 32)) bs=16K count=1 conv=notrunc status=none
-	done
-	if ! cmp test3 <(bef -d -i test3.bef)
+	if ! cmp test3 <(bef -c -P $parity -i test3 | ./error | bef -d)
 	then
 		echo "parity $parity failed error resiliency test!"
 	fi

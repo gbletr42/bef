@@ -2495,6 +2495,10 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 			memmove(ibuf, ibuf + ibuf_s - ahead, ahead);
 	}
 
+	/* We did it! */
+	if(bef_vflag && ret == -BEF_ERR_NEEDMORE)
+		fprintf(stderr, "WARNING: Excess data at EOF, file may have been truncated\n");
+	ret = 0;
 out:
 	bef_destroy(header);
 	bef_construct_free(header.il_n);

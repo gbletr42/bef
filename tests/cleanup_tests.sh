@@ -2,3 +2,4 @@
 #
 
 rm test*
+rm error

@@ -1089,8 +1089,10 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 		bound = k + m;
 
 	/* Assume none are found */
-	memset(recon_arr, NULL, bound * sizeof(*recon_arr));
-	memset(block_nums, UINT32_MAX, bound * sizeof(*block_nums));
+	for(uint32_t i = 0; i < bound; i++) {
+		recon_arr[i] = NULL;
+		block_nums[i] = UINT32_MAX;
+	}
 
 	/* First pass places block numbers in their given indice and, if outside
 	 * the indice but with the bounds of k + m, places it in the stack.

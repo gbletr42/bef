@@ -80,7 +80,8 @@
 #define BEF_SPAR_INIT		4
 #define BEF_SPAR_DESTRO		5
 #define BEF_SPAR_MULTIT		6
-#define BEF_SPAR_MAXNUM		7
+#define BEF_SPAR_OPTIMA		7
+#define BEF_SPAR_MAXNUM		8
 
 /* Reconstruction Flags */
 #define BEF_RECON_REPLACE	0
@@ -1554,6 +1555,8 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 			*max = 64000 + 65535;
 		else if(flag == BEF_SPAR_INIT)
 			ret = bef_wirehair_init();
+		else if(flag == BEF_SPAR_OPTIMA)
+			ret = 1;
 		break;
 #endif
 	default:
@@ -1565,6 +1568,14 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 	}
 
 	return ret;
+}
+
+/* Function to detect whether a given code is optimal or not (i.e. can the data
+ * be recovered by just k fragments, or do we plausibly need k+1?)
+ */
+static int bef_par_optimal(bef_par_t par_t)
+{
+	return bef_sky_par(par_t, NULL, BEF_SPAR_OPTIMA);
 }
 
 /* Function to detect whether a given parity type supports multithreading
@@ -2178,6 +2189,10 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	struct bef_frag_header frag_h;
 	size_t offset;
 	uint64_t sbyte;
+
+	/* Grab k + 1 elements if the code is not optimal */
+	if(bef_par_optimal(header.par_t) != 0)
+		header.k += 1;
 
 	for(offset = ibuf_s - *ahead; offset < ibuf_s;) {
 		if(offset <= ibuf_s - header.nbyte)

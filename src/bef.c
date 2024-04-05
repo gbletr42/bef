@@ -2174,10 +2174,12 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 				     struct bef_real_header header)
 {
 	int ret;
+	uint8_t flag = 0;
 	uint16_t i;
 	struct bef_frag_header frag_h;
 	size_t offset;
 	uint64_t sbyte;
+	uint64_t nbyte;
 
 	for(offset = ibuf_s - *ahead; offset < ibuf_s;) {
 		if(offset <= ibuf_s - header.nbyte)
@@ -2197,6 +2199,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 		 * out ;_;)
 		 */
 		if(frag_h.block_num >= il_count * header.il_n) {
+			flag = 1;
 			break;
 		} else if(frag_h.block_num <
 			  il_count * header.il_n - header.il_n) {
@@ -2225,6 +2228,18 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	}
 
 	*ahead = ibuf_s - offset;
+
+	/* Haven't seen next set of blocks */
+	if(flag == 0) {
+		nbyte = ((uint32_t) header.k + header.m) * header.nbyte;
+		nbyte *= header.il_n;
+
+		/* We know if we reached EOF if our input buffer is smaller than
+		 * a set of interleaved blocks
+		 */
+		if(ibuf_s == nbyte)
+			return -BEF_ERR_NEEDMORE;
+	}
 
 	/* If any has less than k good fragments, return with NEEDMORE */
 	for(i = 0; i < header.il_n; i++) {
@@ -2451,7 +2466,7 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 			break;
 
 		ahead = ibuf_s;
-		while(ahead > 0) {
+		while(ahead >= header.nbyte) {
 			ret = bef_deconstruct_blocks(ibuf, ibuf_s, &obuf,
 						     &obuf_s, &pbyte, &ahead,
 						     il_count, index,
@@ -2495,10 +2510,6 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 			memmove(ibuf, ibuf + ibuf_s - ahead, ahead);
 	}
 
-	/* We did it! */
-	if(bef_vflag && ret == -BEF_ERR_NEEDMORE)
-		fprintf(stderr, "WARNING: Excess data at EOF, file may have been truncated\n");
-	ret = 0;
 out:
 	bef_destroy(header);
 	bef_construct_free(header.il_n);

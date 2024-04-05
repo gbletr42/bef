@@ -696,26 +696,6 @@ static void bef_construct_free(uint16_t il_n)
 	free(bef_work_arr);
 }
 
-/* Similar to construct, except we don't use our work buffer and instead just
- * allocate the work array. Rather pointers will be copied directly from the
- * input buffer, and worked with from there (as unlike with constructing, in
- * deconstructing the input buffer will be larger than the necessary fragment
- * body).
- */
-static void bef_deconstruct_alloc(uint32_t km, uint16_t il_n)
-{
-	bef_work_arr = bef_malloc(il_n * sizeof(*bef_work_arr));
-	for(uint16_t i = 0; i < il_n; i++)
-		*(bef_work_arr + i) = bef_malloc(km * sizeof(*(*bef_work_arr)));
-}
-
-static void bef_deconstruct_free(uint32_t km, uint16_t il_n)
-{
-	for(uint16_t i = 0; i < il_n; i++)
-		free(*(bef_work_arr + i));
-	free(bef_work_arr);
-}
-
 #ifdef BEF_LIBERASURECODE
 static int bef_encode_liberasurecode(const char *input, size_t inbyte,
 				     char **data, char **parity,
@@ -2198,9 +2178,8 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	struct bef_frag_header frag_h;
 	size_t offset;
 	uint64_t sbyte;
-	memset(index, '\0', header.il_n * sizeof(*index));
 
-	for(offset = 0; offset < ibuf_s;) {
+	for(offset = ibuf_s - *ahead; offset < ibuf_s;) {
 		if(offset <= ibuf_s - header.nbyte)
 			sbyte = ibuf_s - header.nbyte - offset;
 		else
@@ -2234,7 +2213,9 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 			i = frag_h.block_num % header.il_n;
 
 			if(index[i] < (uint32_t) header.k + header.m) {
-				*(*(bef_work_arr + i) + index[i]) = ibuf + offset + sizeof(frag_h);
+				memcpy(*(*(bef_work_arr + i) + index[i]),
+				       ibuf + offset + sizeof(frag_h),
+				       header.nbyte - sizeof(frag_h));
 				index[i] += 1;
 			}
 		}
@@ -2246,7 +2227,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	/* If any has less than k good fragments, return with NEEDMORE */
 	for(i = 0; i < header.il_n; i++) {
 		if(index[i] < header.k) {
-			if(bef_vflag)
+			if(bef_vflag > 1)
 				fprintf(stderr, "ERROR: Block %lu does not have k (%u) intact fragments\n",
 					il_count * header.il_n - header.il_n + i,
 					header.k);
@@ -2261,13 +2242,12 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 				  char **obuf, size_t *obuf_s,
 				  uint64_t *pbyte, size_t *ahead,
-				  uint64_t il_count,
+				  uint64_t il_count, uint32_t *index,
 				  struct bef_real_header header)
 {
 	int ret;
 	int flag = 0;
 	size_t onbyte = *obuf_s / header.il_n;
-	uint32_t *index = bef_malloc(header.il_n * sizeof(*index));
 	struct bef_frag_header frag_h;
 	uint64_t frag_b = header.nbyte - sizeof(frag_h);
 	char *tmp;
@@ -2283,7 +2263,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	ret = bef_deconstruct_fragments(ibuf, ibuf_s, index,
 					pbyte, ahead, il_count, header);
 	if(ret != 0)
-		goto out;
+		return ret;
 
 	/* Do our first decode two times, like with construction, to get
 	 * the size of the output buffer
@@ -2293,7 +2273,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 				     frag_b, obuf, &onbyte,
 				     BEF_BUFFER_NEW, header);
 		if(ret != 0) {
-			goto out;
+			return ret;
 		} else {
 			*obuf_s = header.il_n * onbyte;
 			*obuf = bef_realloc(*obuf, *obuf_s);
@@ -2320,8 +2300,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 
 	if(flag != 0)
 		ret = flag;
-out:
-	free(index);
+
 	return ret;
 }
 
@@ -2336,6 +2315,7 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	size_t obuf_s = 0; //Not known yet
 	uint64_t pbyte = 0;
 	size_t ahead = 0; //Number of bytes read ahead, when scanning.
+	uint32_t *index = bef_malloc(header.il_n * sizeof(*index));
 	uint64_t il_count = 1; //Number of interleaved sets we've gone through
 
 	if(bef_rflag == 0) {
@@ -2435,33 +2415,21 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 	if(ret != 0)
 		return ret;
 
-	if(sbyte == 0) {
-		sbyte = 1024 * header.il_n * ((uint32_t) header.k + header.m);
-		if(bef_vflag)
-			fprintf(stderr, "Setting sbyte to default value %lu (1024 per fragment)\n",
-				sbyte);
-	}
-
 	if(header.nbyte >=
-	   (UINT64_MAX - sbyte) / (((uint32_t) header.k + header.m) * header.il_n)) {
+	   UINT64_MAX / (((uint32_t) header.k + header.m) * header.il_n)) {
 		if(bef_vflag)
 			fprintf(stderr,
-				"ERROR: Fragment size is greater than max (UINT64_MAX - sbyte) / number of fragments\n");
+				"ERROR: Fragment size is greater than max UINT64_MAX / number of fragments\n");
 		return -BEF_ERR_INVALINPUT;
 	}
 
 	/* Allocate our buffers */
 	ibuf_s = ((uint32_t) header.k + header.m) * header.nbyte * header.il_n;
-	/* Allocate extra for scanning, plus align it with fragment size */
-	if(sbyte >= header.nbyte)
-		ibuf_s += sbyte;
-	else
-		ibuf_s += header.nbyte;
-	ibuf_s = (ibuf_s / header.nbyte) * header.nbyte;
 	ibuf = bef_malloc(ibuf_s);
 
 	/* Allocate our work arrays */
-	bef_deconstruct_alloc((uint32_t) header.k + header.m, header.il_n);
+	bef_construct_alloc(header.nbyte - sizeof(struct bef_frag_header),
+			    (uint32_t) header.k + header.m, header.il_n);
 
 	/* Another eternal read loop incoming */
 	while(1) {
@@ -2477,42 +2445,59 @@ int bef_deconstruct(int input, int output, struct bef_real_header header,
 		}
 
 		/* Check if we even have enough data... */
-		if(ibuf_s < header.nbyte * header.il_n * header.k)
+		if(ibuf_s < header.nbyte)
 			break;
 
-		ret = bef_deconstruct_blocks(ibuf, ibuf_s, &obuf, &obuf_s,
-					     &pbyte, &ahead, il_count,
-					     header);
-		if(ret != 0)
-			goto out;
+		ahead = ibuf_s;
+		while(ahead > 0) {
+			ret = bef_deconstruct_blocks(ibuf, ibuf_s, &obuf,
+						     &obuf_s, &pbyte, &ahead,
+						     il_count, index,
+						     header);
+			if(ret == -BEF_ERR_NEEDMORE) {
+				if(ahead <= header.nbyte) {
+					break;
+				} else {
+					if(bef_vflag)
+						fprintf(stderr,
+							"ERROR: Block set %lu does not have enough fragments\n",
+							il_count);
+					goto out;
+				}
+			} else if(ret != 0) {
+				goto out;
+			}
 
-		/* Check for integer overflow */
-		if(obuf_s - pbyte > obuf_s){//Impossible, unless overflowed
-			ret = -BEF_ERR_OVERFLOW;
-			if(bef_vflag)
-				fprintf(stderr,
-					"ERROR: padded bytes overflowed\n");
-			goto out;
-		}
+			/* Check for integer overflow */
+			if(obuf_s - pbyte > obuf_s){//Impossible, unless overflowed
+				ret = -BEF_ERR_OVERFLOW;
+				if(bef_vflag)
+					fprintf(stderr,
+						"ERROR: padded bytes overflowed\n");
+				goto out;
+			}
 
-		bret = bef_safe_rw(output, obuf, obuf_s - pbyte,
-				   BEF_SAFE_WRITE);
-		if(bret != obuf_s - pbyte) {
-			ret = -BEF_ERR_WRITEERR;
-			goto out;
+			bret = bef_safe_rw(output, obuf, obuf_s - pbyte,
+					   BEF_SAFE_WRITE);
+			if(bret != obuf_s - pbyte) {
+				ret = -BEF_ERR_WRITEERR;
+				goto out;
+			}
+
+			il_count++;
+			memset(index, '\0', header.il_n * sizeof(*index));
 		}
 
 		/* Copy over input that was read ahead */
 		if(ahead > 0)
 			memmove(ibuf, ibuf + ibuf_s - ahead, ahead);
-
-		il_count++;
 	}
 
 out:
 	bef_destroy(header);
-	bef_deconstruct_free((uint32_t) header.k + header.m, header.il_n);
+	bef_construct_free(header.il_n);
 	free(obuf);
+	free(index);
 	free(ibuf);
 	return ret;
 }

@@ -2286,7 +2286,6 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	if(frag_b > header.nbyte) {
 		if(bef_vflag)
 			fprintf(stderr, "ERROR: fragment byte size overflow\n");
-		free(index);
 		return -BEF_ERR_OVERFLOW;
 	}
 

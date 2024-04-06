@@ -39,9 +39,9 @@ The format is designed to be simple, although it was quite a bit more complicate
 
 \[B1-F1\] -> \[B2-F1\] -> \[B3-F1\] -> \[B1-F2\] -> \[...\] -> \[B1-FM\] -> \[B2-FM\] -> \[B3-FM\]
 
-This format is pretty similar to the one used in CDs, but unlike that standard bef is fully variable in how it can follow this format. The number of parity and data fragments, the number of blocks to interleave, the block size, the hash, and the specific parity library providing the erasure codes are all customizable and stored in a header right before the data.
+This format is pretty similar to the one used in CDs (except it doesn't have a inner code), but unlike that standard bef is fully variable in how it can follow this format. The number of parity and data fragments, the number of blocks to interleave, the block size, the hash, and the specific parity library providing the erasure codes are all customizable and stored in a header right before the data.
 
-Currently, that is all the information stored in the header, making it only 20 bytes large. However, we want to be able to extend the format in the future and ensure we are getting a good header. So the header has additional operation flags and padding to make it 64 bytes, is duplicated in case it corrupts, and a hash is available to check its integrity. In the worst case, we can omit the header entirely if we already know all information.
+Currently, that is all the information stored in the header, making it only 16 bytes large. However, we want to be able to extend the format in the future and ensure we are getting a good header. So the header has additional operation flags and padding to make it 64 bytes, is duplicated in case it corrupts, and a hash is available to check its integrity. In the worst case, we can omit the header entirely if we already know all information.
 
 I believe this format is, or at least can be with the right settings, highly resilient to burst corruption. Under default settings, it can handle in the worst case one burst of slightly larger than 16KiB per 320KiB. It is however not resilient to random noise, and will corrupt beyond repair in such environments. Luckily environments with such ambient noise in computing are rare, outside of telecommunications.
 
@@ -78,7 +78,7 @@ There are some additional optional dependencies as well
 
 ## Optional Hashing backend dependencies
 - [BLAKE3](https://github.com/BLAKE3-team/BLAKE3/tree/master/c) for BLAKE3
-- [OpenSSL](https://www.openssl.org) for SHA1, SHA256, SHA3, BLAKE2S, and MD5
+- [OpenSSL](https://www.openssl.org) for SHA1, SHA256, SHA512, SHA3, BLAKE2S, BLAKE2B, and MD5
 - [Zlib](https://github.com/madler/zlib) for CRC32
 
 ## Optional Parity backend dependencies

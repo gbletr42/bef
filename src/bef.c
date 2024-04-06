@@ -1099,6 +1099,7 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 	 */
 	for(uint32_t i = 0; i < frag_len; i++) {
 		memcpy(&header, *(frags + i), sizeof(header));
+		bef_unprepare_fec_header(&header);
 		*(frags + i) += sizeof(header);
 
 		if(header.block_num < bound) {
@@ -1121,6 +1122,7 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 			if(flag == BEF_RECON_REPLACE && counter > 0) {
 				memcpy(&header, *(frags + stack[--counter]),
 				       sizeof(header));
+				bef_unprepare_fec_header(&header);
 				*(frags + stack[counter]) += sizeof(header);
 				recon_arr[i] = *(frags + stack[counter]);
 				block_nums[i] = header.block_num;

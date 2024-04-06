@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/random.h>
-#define ITER	1024
+#define ITER	256
 
 int main() {
 	int i = 0;

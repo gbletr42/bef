@@ -8,7 +8,7 @@ do
 	bef -cM -b $BSIZE -i $file -o ${file}.bef
 	SIZE=$(cat ${file}.bef | wc -c)
 
-	if [[ $SIZE > 16777216 ]]
+	if [[ $SIZE -gt 16777216 ]]
 	then
 		echo "Minimize test created big file for $file"
 	fi

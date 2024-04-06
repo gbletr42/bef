@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/random.h>
-#define ITER	1024
+#define ITER	256
 
 /* Same as error.c, but with random errors instead. Not used in testing due to
  * nondeterminism, but useful when experimenting like a good monkey.

@@ -1,4 +1,4 @@
-.TH "bef" "1" "30 Mar 2024" "bef v0.2.4" "User Commands"
+.TH "bef" "1" "6 Apr 2024" "bef v0.3.0" "User Commands"
 .P
 .SH "NAME"
 bef \- An extensible, fast, and useable file utility to encode and decode erasure coded streams of data.
@@ -103,7 +103,7 @@ leopard: The Reed Solomon implemented by Chris Taylor's Leopard. Uses a FFT inst
 wirehair: The Fountain Code implemented by Chris Taylor's Wirehair. Reasonably fast (not as fast as Leopard or zfec) and scales scaringly well. This is the most scalable of all the parities currently offered, with the restriction that k <= 64000. Max number of fragments is 129535 (64000+65535).
 .TP
 \fB\-H\fR, \fB\-\-hash-type\fR
-The specific hash backend type to use to compute the fragment and header hashes. At this moment, the size of these hashes are at most 256 bits. The options are below, and the default is xxhash as it is exceptionally fast. If one desires cryptographic security against evil corruption, then the best recommendation is either BLAKE3 for a good compromise on speed or SHA256
+The specific hash backend type to use to compute the fragment and header hashes. At this moment, the size of these hashes are at most 256 bits. The options are below, and the default is xxhash as it is exceptionally fast. If one desires cryptographic security against evil corruption, then the best recommendation is either BLAKE3 for a good compromise on speed or SHA256/SHA512 (SHA512 is faster on 64bit machines).
 .IP
 none: No hash, living life dangerously
 .IP
@@ -123,14 +123,11 @@ blake3: Uses the BLAKE3 hash algorithm, provied by BLAKE3-team's c implementatio
 .IP
 md5: Uses the MD5 hash algorithm, provided by OpenSSL.
 .IP
-crc32: Uses the CRC32 checksum, provided by Zlib.
+crc32: Uses the CRC32 checksum, provided by zlib or zlib-ng.
 .IP
 crc32c: Uses the CRC32C checksum, provided by SSE4.2 on Intel and AMD machines.
 .IP
 xxhash: Uses the xxHash hash algorithm, provided by xxHash and a mandatory dependency.
-.TP
-\fB-s\fR, \fB\-\-scan\fR
-Sets the number of bytes that are scanned for a proper fragment, if no proper fragment is found. Specifically, if the last fragment was good, then this scans s bytes ahead for another good fragment, otherwise it scans s bytes ahead and behind.
 .TP
 \fB-T\fR, \fB\-\-threads\fR
 Sets the number of threads that are used to encode/decode concurrently. A given value of 0 is equivalent to the minimum of either the number of interleaved blocks or the number of threads available. By default, bef will only use one thread. Currently multithreading support is implemented via OpenMP.

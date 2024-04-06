@@ -2554,8 +2554,7 @@ out:
 	return ret;
 }
 
-int bef_deconstruct(int input, int output, struct bef_real_header header,
-		    size_t sbyte)
+int bef_deconstruct(int input, int output, struct bef_real_header header)
 {
 	int ret = 0;
 	char *ibuf = NULL;

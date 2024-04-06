@@ -246,8 +246,7 @@ int bef_construct(int input, int output, uint64_t bsize,
  * set to 0, it will use the values in the header struct, otherwise it'll ignore
  * them and read the header from the input.
  */
-int bef_deconstruct(int input, int output, struct bef_real_header header,
-		    size_t sbyte);
+int bef_deconstruct(int input, int output, struct bef_real_header header);
 
 /* Memory-related boilerplate functions, crashes when out of memory */
 void *bef_malloc(size_t sz);

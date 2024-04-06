@@ -67,7 +67,6 @@ printf("-m|--parity			Number of parity fragments per block\n");
 printf("-l|--interleave			Number of blocks to interleave\n");
 printf("-P|--parity-type		Parity type for BEF file\n");
 printf("-H|--hash-type			Hash type for BEF file\n");
-printf("-s|--scan			Number of bytes to scan for misplaced fragments\n");
 printf("-T|--threads			Number of threads to use concurrently\n");
 printf("-i|--input			Input file\n");
 printf("-o|--output			Output file\n\n");
@@ -156,7 +155,6 @@ int main(int argc, char **argv) {
 	int dflag = 0;
 	struct bef_real_header header = {0};
 	uint64_t bsize = 0;
-	uint64_t sbyte = 0;
 	int ret;
 	int input = STDIN_FILENO;
 	int output = STDOUT_FILENO;
@@ -182,14 +180,13 @@ int main(int argc, char **argv) {
 				{"interleave", required_argument, 0, 'l'},
 				{"parity-type", required_argument, 0, 'P'},
 				{"hash-type", required_argument, 0, 'H'},
-				{"scan", required_argument, 0, 's'},
 				{"threads", required_argument, 0, 'T'},
 				{"input", required_argument, 0, 'i'},
 				{"output", required_argument, 0, 'o'},
 				{0, 0, 0, 0}
 			};
 
-	while ((opt = getopt_long(argc, argv, "hVvcdMp:r:k:m:b:l:P:H:s:T:i:o:",
+	while ((opt = getopt_long(argc, argv, "hVvcdMp:r:k:m:b:l:P:H:T:i:o:",
 				  long_options, &opt_index)) != -1) {
 		switch(opt) {
 		case 'h':
@@ -336,16 +333,6 @@ int main(int argc, char **argv) {
 				exit(-BEF_ERR_INVALINPUT);
 			}
 			break;
-		case 's':
-			sbyte = (uint64_t) strtoll(optarg, &suffix, 10);
-			if((sbyte == UINT64_MAX || sbyte == 0) &&
-			   errno == ERANGE) {
-				fprintf(stderr,
-					"Input a proper value for -b!\n");
-				exit(-BEF_ERR_INVALINPUT);
-			}
-			sbyte *= bef_convert_suffix(suffix);
-			break;
 		case 'T':
 			tmp = (uint64_t) strtol(optarg, NULL, 10);
 			if(tmp > UINT16_MAX) {
@@ -391,7 +378,7 @@ int main(int argc, char **argv) {
 		ret = bef_construct(input, output, bsize, header);
 		return ret;
 	} else if(dflag) {
-		ret = bef_deconstruct(input, output, header, sbyte);
+		ret = bef_deconstruct(input, output, header);
 		return ret;
 	}
 }

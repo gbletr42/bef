@@ -59,5 +59,51 @@ A graph for the graphically minded (that big table can cause dyslexia)
 As one can see, my tool, for almost every backend available, is significantly faster than the other options. Specifically, fec-vand with AVX2 optimizations, cm256-cauchy, leopard, and wirehair are the fastest available, with leopard and wirehair both being significantly faster than par2cmdline\[-turbo\] (although the difference between turbo and them is not as significant). Zfec, although using the same code as fec-vand without AVX2 optimizations, is significantly slower than my tool on equivalent benchmarks, likely due to it being based on Python, it being single-threaded (although it's still significantly slower than bef with -T1), or it writing each block to its own file.
 
 Another thing to note is that on prior benchmarks par2 performed much worse, as they were conducted on a rather poor laptop. It is likely that since par2cmdline\[turbo\] uses as much CPU as possible and is rather intensive on the machine, the laptop throttled itself due to overheating and memory bandwidth issues due to too much load.
+
+# Error Resiliency
+This comparison will be between bef and par2cmdline-turbo. The test file will have 1GiB random data. 
+
+We will test the survival of the file following two separate corruption patterns, burst corruption (contiguous corruption of n bytes) and systematic corruption (corruption of one byte at every n offset). For par2, we will corrupt the original file, for bef we will corrupt the bef file. The table further below indicates at what value does the file become unrecoverable.
+
+Specifically, the commands used are as follows
+
+```
+#par2 command, with maximum number of blocks, version v1.1.1
+par2 c -r25 -b32768 -n1 -u $file
+
+#bef command, likewise with max number of fragments (for zfec backend), version v0.3.0
+bef -c -k 204 -m 51 -b 816K -i $file -o ${file}.bef
+
+#burst corruption command
+dd if=/dev/urandom of=$file bs=1K count=$n conv=notrunc oseek=1
+
+#systematic corruption command (actually a C script)
+./error < $file > ${file}2 && mv ${file2} $file
+#where error.c is this file, modeled after my error resiliency test
+
+#include <stdio.h>
+#define N   $N
+
+int main() {
+    int i = 0;
+    char in[1024];
+
+    while(fread(in, 1024, 1, stdin) != 0) {
+        if(i % N == 0)
+            in[78] = '\0';
+        fwrite(in, 1024, 1, stdout);
+        i++;
+    }
+}
+
+```
+
+And here is our table
+|tool|burst corruption limit|systematic corruption limit|
+|-|-|-|
+|bef|1041KiB|1/23KiB|
+|par2|262112KiB|1/128KiB|
+
+As one can see, my tool is significantly less resilient against burst corruption, at least not without a lot more memory, but is significantly more resilient against burst corruption.
 # Conclusions
 My conclusions from these benchmarks is that if you want a fast and capable erasure coding tool and are fine with the inherent limitations in the format, pick my tool. Otherwise, if you want maximal protection at the cost of speed/streamability, pick par2cmdline-turbo. Stay away from both par2cmdline and zfec, the first is terribly slow and the second doesn't check for integrity while also being rather inflexible.

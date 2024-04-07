@@ -104,6 +104,6 @@ And here is our table
 |bef|1041KiB|1/23KiB|
 |par2|262112KiB|1/128KiB|
 
-As one can see, my tool is significantly less resilient against burst corruption, at least not without a lot more memory, but is significantly more resilient against burst corruption.
+As one can see, my tool is significantly less resilient against burst corruption, at least not without a lot more memory, but is significantly more resilient against systematic corruption.
 # Conclusions
 My conclusions from these benchmarks is that if you want a fast and capable erasure coding tool and are fine with the inherent limitations in the format, pick my tool. Otherwise, if you want maximal protection at the cost of speed/streamability, pick par2cmdline-turbo. Stay away from both par2cmdline and zfec, the first is terribly slow and the second doesn't check for integrity while also being rather inflexible.

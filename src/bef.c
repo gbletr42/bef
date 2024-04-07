@@ -992,7 +992,7 @@ static int bef_encode_wirehair(const char *input, size_t inbyte, char **data,
 	WirehairCodec codec = NULL;
 	uint64_t size = inbyte / header.k;
 	struct bef_fec_header *frag_h;
-	*frag_len = size + sizeof(frag_h);
+	*frag_len = size + sizeof(*frag_h);
 
 	if(size > UINT32_MAX || (header.k > 64000 || header.k < 2)) {
 		if(bef_vflag && size > UINT32_MAX)

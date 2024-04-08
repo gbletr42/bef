@@ -261,6 +261,6 @@ uint32_t bef_max_frag(bef_par_t par_t);
  * unneeded. If you give multiple, the last input in order will be the text
  * returned.
  */
-char *bef_convert_text(uint8_t err, bef_hash_t hash_t, bef_par_t par_t);
+char *bef_convert_text(uint32_t err, bef_hash_t hash_t, bef_par_t par_t);
 
 #endif /* BEF_H */

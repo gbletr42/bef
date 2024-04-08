@@ -140,7 +140,7 @@ void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz)
 	return ptr;
 }
 
-char *bef_convert_text(uint8_t err, bef_hash_t hash_t, bef_par_t par_t)
+char *bef_convert_text(uint32_t err, bef_hash_t hash_t, bef_par_t par_t)
 {
 	char *ret = "Unknown";
 
@@ -2338,6 +2338,9 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	uint64_t nbyte;
 
 	for(offset = ibuf_s - *ahead; offset < ibuf_s;) {
+		if(ibuf_s <= header.nbyte)
+			break;
+
 		if(offset <= ibuf_s - header.nbyte)
 			sbyte = ibuf_s - header.nbyte - offset;
 		else

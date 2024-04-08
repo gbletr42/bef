@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
 	int dflag = 0;
 	struct bef_real_header header = {0};
 	uint64_t bsize = 0;
-	int ret;
+	int ret = 0;
 	int input = STDIN_FILENO;
 	int output = STDOUT_FILENO;
 	int opt_index;

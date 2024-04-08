@@ -257,4 +257,10 @@ void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz);
 /* Get max number of fragments for a given parity type */
 uint32_t bef_max_frag(bef_par_t par_t);
 
+/* Print text representation of given input. Give inputs of 0 for parameters
+ * unneeded. If you give multiple, the last input in order will be the text
+ * returned.
+ */
+char *bef_convert_text(uint8_t err, bef_hash_t hash_t, bef_par_t par_t);
+
 #endif /* BEF_H */

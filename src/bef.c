@@ -140,7 +140,7 @@ void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz)
 	return ptr;
 }
 
-static char *bef_convert_text(uint8_t err, bef_hash_t hash_t, bef_par_t par_t)
+char *bef_convert_text(uint8_t err, bef_hash_t hash_t, bef_par_t par_t)
 {
 	char *ret = "Unknown";
 
@@ -2486,7 +2486,7 @@ static int bef_deconstruct_init(int input,
 		/* Get our header and verify its sanity */
 		ret = bef_deconstruct_header(input, header);
 		if(ret != 0)
-			return -BEF_ERR_INVALINPUT;
+			return ret;
 
 		if(header->k == 0) {
 			if(bef_vflag)

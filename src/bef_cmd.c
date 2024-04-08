@@ -374,12 +374,19 @@ int main(int argc, char **argv) {
 		exit(-BEF_ERR_INVALINPUT);
 	}
 
-	if(cflag) {
+	if(cflag)
 		ret = bef_construct(input, output, bsize, header);
-		return ret;
-	} else if(dflag) {
+	else if(dflag)
 		ret = bef_deconstruct(input, output, header);
-		return ret;
+
+	if(bef_vflag && ret != 0) {
+		if(ret < 0)
+			fprintf(stderr, "ERROR: return %d (%s)\n", ret,
+				bef_convert_text(-ret, 0, 0));
+		else
+			fprintf(stderr, "ERROR: return %d\n", ret);
 	}
+
+	return ret;
 }
 

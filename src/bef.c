@@ -140,6 +140,145 @@ void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz)
 	return ptr;
 }
 
+static char *bef_convert_text(uint8_t err, bef_hash_t hash_t, bef_par_t par_t)
+{
+	char *ret;
+
+	if(err != 0) {
+		switch(err) {
+		case BEF_ERR_INVALSIZE:
+			ret = "Invalid Size";
+			break;
+		case BEF_ERR_INVALINPUT:
+			ret = "Invalid Input";
+			break;
+		case BEF_ERR_NEEDMORE:
+			ret = "Need More";
+			break;
+		case BEF_ERR_OVERFLOW:
+			ret = "Overflow";
+			break;
+		case BEF_ERR_READERR:
+			ret = "Read Error";
+			break;
+		case BEF_ERR_WRITEERR:
+			ret = "Write Error";
+			break;
+		case BEF_ERR_INVALHASH:
+			ret = "Invalid Hash";
+			break;
+		case BEF_ERR_NULLPTR:
+			ret = "Null Pointer";
+			break;
+		case BEF_ERR_INVALHEAD:
+			ret = "Invalid Header";
+			break;
+		case BEF_ERR_OPENSSL:
+			ret = "OpenSSL";
+			break;
+		case BEF_ERR_CM256:
+			ret = "CM256";
+			break;
+		case BEF_ERR_OPENFEC:
+			ret = "OpenFEC";
+			break;
+		case BEF_ERR_LEOPARD:
+			ret = "Leopard";
+			break;
+		case BEF_ERR_WIREHAIR:
+			ret = "Wirehair";
+			break;
+		default:
+			ret = "Unknown";
+			break;
+		}
+	}
+
+	if(hash_t != 0) {
+		switch(hash_t) {
+		case BEF_HASH_NONE:
+			ret = "None";
+			break;
+		case BEF_HASH_SHA1:
+			ret = "SHA1";
+			break;
+		case BEF_HASH_SHA256:
+			ret = "SHA256";
+			break;
+		case BEF_HASH_SHA3:
+			ret = "SHA3";
+			break;
+		case BEF_HASH_BLAKE2S:
+			ret = "BLAKE2S";
+			break;
+		case BEF_HASH_BLAKE3:
+			ret = "BLAKE3";
+			break;
+		case BEF_HASH_MD5:
+			ret = "MD5";
+			break;
+		case BEF_HASH_CRC32:
+			ret = "CRC32";
+			break;
+		case BEF_HASH_XXHASH:
+			ret = "XXHash";
+			break;
+		case BEF_HASH_SHA512:
+			ret = "SHA512";
+			break;
+		case BEF_HASH_BLAKE2B:
+			ret = "BLAKE2B";
+			break;
+		case BEF_HASH_CRC32C:
+			ret = "CRC32C";
+			break;
+		default:
+			ret = "Unknown";
+			break;
+		}
+	}
+
+	if(par_t != 0) {
+		switch(par_t) {
+		case BEF_PAR_J_V_RS:
+			ret = "Jerasure Vandermonde Reed Solomon";
+			break;
+		case BEF_PAR_J_C_RS:
+			ret = "Jerasure Cauchy Reed Solomon";
+			break;
+		case BEF_PAR_LE_V_RS:
+			ret = "liberasurecode Vandermonde Reed Solomon";
+			break;
+		case BEF_PAR_I_V_RS:
+			ret = "Intel ISA-L Vandermonde Reed Solomon";
+			break;
+		case BEF_PAR_I_C_RS:
+			ret = "Intel ISA-L Cauchy Reed Solomon";
+			break;
+		case BEF_PAR_F_V_RS:
+			ret = "zfec Vandermonde Reed Solomon";
+			break;
+		case BEF_PAR_CM_C_RS:
+			ret = "CM256 Cauchy Reed Solomon";
+			break;
+		case BEF_PAR_OF_V_RS:
+			ret = "OpenFEC Vandermonde Reed Solomon";
+			break;
+		case BEF_PAR_L_F_RS:
+			ret = "Leopard FFT Reed Solomon";
+			break;
+		case BEF_PAR_W_FC:
+			ret = "Wirehair Fountain Code";
+			break;
+		default:
+			ret = "Unknown";
+			break;
+		}
+	}
+
+	return ret;
+}
+
 #ifdef BEF_LIBERASURECODE
 static ec_backend_id_t bef_liberasurecode_par_switch(bef_par_t par_t)
 {
@@ -617,7 +756,9 @@ int bef_digest(const char *input, size_t nbyte, uint8_t *output,
 		break;
 	default:
 		if(bef_vflag)
-			fprintf(stderr, "ERROR: Invalid Hash Type\n");
+			fprintf(stderr,
+				"ERROR: Invalid Hash Type %u (%s)\n",
+				hash_t, bef_convert_text(0, hash_t, 0));
 		ret = -BEF_ERR_INVALINPUT;
 		break;
 	}
@@ -1562,8 +1703,8 @@ static int bef_sky_par(bef_par_t par_t, void *p, uint8_t flag)
 #endif
 	default:
 		if(bef_vflag)
-			fprintf(stderr, "ERROR: Invalid Parity Type %u\n",
-				par_t);
+			fprintf(stderr, "ERROR: Invalid Parity Type %u (%s)\n",
+				par_t, bef_convert_text(0, 0, par_t));
 		ret = -BEF_ERR_INVALINPUT;
 		break;
 	}
@@ -2444,6 +2585,18 @@ static int bef_deconstruct_init(int input,
 			fprintf(stderr,
 				"ERROR: Fragment size is greater than max UINT64_MAX / number of fragments\n");
 		return -BEF_ERR_INVALINPUT;
+	}
+
+	if(bef_vflag) {
+		fprintf(stderr, "Fragment Size: %lu\n", header->nbyte);
+		fprintf(stderr, "Data Fragments Per Block: %u\n", header->k);
+		fprintf(stderr, "Parity Fragments Per Block: %u\n", header->m);
+		fprintf(stderr, "Number of Blocks Interleaved: %u\n",
+			header->il_n);
+		fprintf(stderr, "Parity Type: %u (%s)\n", header->par_t,
+			bef_convert_text(0, 0, header->par_t));
+		fprintf(stderr, "Hash Type: %u (%s)\n", header->hash_t,
+			bef_convert_text(0, header->hash_t, 0));
 	}
 
 	/* Allocate our buffers */

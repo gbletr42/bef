@@ -221,7 +221,7 @@ static char *bef_convert_text(uint8_t err, bef_hash_t hash_t, bef_par_t par_t)
 			ret = "CRC32";
 			break;
 		case BEF_HASH_XXHASH:
-			ret = "XXHash";
+			ret = "xxHash";
 			break;
 		case BEF_HASH_SHA512:
 			ret = "SHA512";

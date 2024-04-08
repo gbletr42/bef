@@ -142,7 +142,7 @@ void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz)
 
 static char *bef_convert_text(uint8_t err, bef_hash_t hash_t, bef_par_t par_t)
 {
-	char *ret;
+	char *ret = "Unknown";
 
 	if(err != 0) {
 		switch(err) {

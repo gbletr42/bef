@@ -2338,7 +2338,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	uint64_t nbyte;
 
 	for(offset = ibuf_s - *ahead; offset < ibuf_s;) {
-		if(ibuf_s <= header.nbyte)
+		if(ibuf_s < header.nbyte)
 			break;
 
 		if(offset <= ibuf_s - header.nbyte)

@@ -2587,7 +2587,7 @@ static int bef_deconstruct_init(int input,
 		return -BEF_ERR_INVALINPUT;
 	}
 
-	if(bef_vflag) {
+	if(bef_vflag && bef_rflag == 0) {
 		fprintf(stderr, "Fragment Size: %lu\n", header->nbyte);
 		fprintf(stderr, "Data Fragments Per Block: %u\n", header->k);
 		fprintf(stderr, "Parity Fragments Per Block: %u\n", header->m);

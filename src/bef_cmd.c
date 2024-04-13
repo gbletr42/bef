@@ -47,6 +47,9 @@ uint8_t bef_mflag = 0;
 /* Our number of threads */
 uint16_t bef_numT = 1;
 
+/* Our memory limit */
+double bef_limit = 0.10;
+
 static void bef_help(void) {
 printf("bef is a command line utility that encodes and decodes erasure coded streams.\n");
 printf("More information can be found in the manpage\n\n");
@@ -57,6 +60,7 @@ printf("-c|--construct|--encode		Constructs a new BEF file\n");
 printf("-d|--deconstruct|--decode	Deconstructs an existing BEF file\n");
 printf("-M|--minimize			Minimize the given block size if the incoming\n");
 printf("				stream is small\n");
+printf("-L|--limit			Percentage of total memory that bef can use\n");
 printf("-p|--preset			Set the arguments to a given preset\n");
 printf("-r|--raw			Flag to disable reading and/or writing the\n");
 printf("				header, You must provide the fragment size to\n");
@@ -172,6 +176,7 @@ int main(int argc, char **argv) {
 				{"deconstruct", no_argument, 0, 'd'},
 				{"decode", no_argument, 0, 'd'},
 				{"minimize", no_argument, 0, 'M'},
+				{"limit", required_argument, 0, 'L'},
 				{"preset", required_argument, 0, 'p'},
 				{"raw", required_argument, 0, 'r'},
 				{"bsize", required_argument, 0, 'b'},
@@ -186,7 +191,7 @@ int main(int argc, char **argv) {
 				{0, 0, 0, 0}
 			};
 
-	while ((opt = getopt_long(argc, argv, "hVvcdMp:r:k:m:b:l:P:H:T:i:o:",
+	while ((opt = getopt_long(argc, argv, "hVvcdML:p:r:k:m:b:l:P:H:T:i:o:",
 				  long_options, &opt_index)) != -1) {
 		switch(opt) {
 		case 'h':
@@ -209,6 +214,18 @@ int main(int argc, char **argv) {
 		case 'M':
 			bef_mflag = 1;
 			break;
+		case 'L':
+			tmp = (uint64_t) strtoul(optarg, NULL, 10);
+			if(tmp > 100) {
+				fprintf(stderr,
+					"Input a proper value for -L!\n");
+				exit(-BEF_ERR_INVALINPUT);
+			}
+			if(tmp == 0)
+				bef_limit = 0.10;
+			else
+				bef_limit = (double) tmp / 100;
+			break;
 		case 'p':
 			if(strcmp(optarg, "standard") == 0)
 				preset = 0;
@@ -229,7 +246,7 @@ int main(int argc, char **argv) {
 			break;
 		case 'r':
 			bef_rflag = 1;
-			header.nbyte = (uint64_t) strtoll(optarg, &suffix, 10);
+			header.nbyte = (uint64_t) strtoull(optarg, &suffix, 10);
 			if((header.nbyte == UINT64_MAX || header.nbyte == 0) &&
 			   errno == ERANGE) {
 				fprintf(stderr,
@@ -239,7 +256,7 @@ int main(int argc, char **argv) {
 			header.nbyte *= bef_convert_suffix(suffix);
 			break;
 		case 'k':
-			tmp = (uint64_t) strtol(optarg, NULL, 10);
+			tmp = (uint64_t) strtoul(optarg, NULL, 10);
 			if(tmp > UINT16_MAX) {
 				fprintf(stderr,
 					"Input a proper value for -k!\n");
@@ -248,7 +265,7 @@ int main(int argc, char **argv) {
 			header.k = (uint16_t) tmp;
 			break;
 		case 'm':
-			tmp = (uint64_t) strtol(optarg, NULL, 10);
+			tmp = (uint64_t) strtoul(optarg, NULL, 10);
 			if(tmp > UINT16_MAX) {
 				fprintf(stderr,
 					"Input a proper value for -m!\n");
@@ -257,7 +274,7 @@ int main(int argc, char **argv) {
 			header.m = (uint16_t) tmp;
 			break;
 		case 'b':
-			bsize = (uint64_t) strtoll(optarg, &suffix, 10);
+			bsize = (uint64_t) strtoull(optarg, &suffix, 10);
 			if((bsize == UINT64_MAX || bsize == 0) &&
 			   errno == ERANGE) {
 				fprintf(stderr,
@@ -267,7 +284,7 @@ int main(int argc, char **argv) {
 			bsize *= bef_convert_suffix(suffix);
 			break;
 		case 'l':
-			tmp = (uint64_t) strtol(optarg, NULL, 10);
+			tmp = (uint64_t) strtoul(optarg, NULL, 10);
 			if(tmp > UINT16_MAX) {
 				fprintf(stderr,
 					"Input a proper value for -l!\n");
@@ -334,7 +351,7 @@ int main(int argc, char **argv) {
 			}
 			break;
 		case 'T':
-			tmp = (uint64_t) strtol(optarg, NULL, 10);
+			tmp = (uint64_t) strtoul(optarg, NULL, 10);
 			if(tmp > UINT16_MAX) {
 				fprintf(stderr,
 					"Input a proper value for -k!\n");

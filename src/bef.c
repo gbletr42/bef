@@ -110,8 +110,32 @@ static size_t bef_work_s;
 static char *bef_work = NULL;
 static char ***bef_work_arr = NULL;
 
+size_t bef_mem_csz()
+{
+	uint64_t sz = 0;
+	FILE *pid = fopen("/proc/self/statm", "r");
+	int ret = fscanf(pid, "%lu", &sz);
+	if(ret == 1)
+		return (size_t) sz * getpagesize();
+	else
+		return 0;
+}
+
+size_t bef_mem_tsz()
+{
+	uint64_t sz = 0;
+	char dummy[1024];
+	FILE *pid = fopen("/proc/meminfo", "r");
+	int ret = fscanf(pid, "%s %lu", dummy, &sz);
+	if(ret == 2)
+		return (size_t) sz * 1024;
+	else
+		return 0;
+}
+
 void *bef_malloc(size_t sz)
 {
+	assert(bef_mem_csz() + sz <= bef_limit * bef_mem_tsz());
 	void *ptr = malloc(sz);
 	assert(ptr != NULL);
 	return ptr;
@@ -119,6 +143,7 @@ void *bef_malloc(size_t sz)
 
 void *bef_calloc(size_t nmemb, size_t sz)
 {
+	assert(bef_mem_csz() + sz * nmemb <= bef_limit * bef_mem_tsz());
 	void *ptr = calloc(nmemb, sz);
 	assert(ptr != NULL);
 	return ptr;
@@ -126,6 +151,7 @@ void *bef_calloc(size_t nmemb, size_t sz)
 
 void *bef_realloc(void *ptr, size_t sz)
 {
+	assert(bef_mem_csz() + sz <= bef_limit * bef_mem_tsz());
 	assert(ptr != NULL);
 	ptr = realloc(ptr, sz);
 	assert(ptr != NULL);
@@ -134,6 +160,7 @@ void *bef_realloc(void *ptr, size_t sz)
 
 void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz)
 {
+	assert(bef_mem_csz() + sz * nmemb <= bef_limit * bef_mem_tsz());
 	assert(ptr != NULL);
 	ptr = reallocarray(ptr, nmemb, sz);
 	assert(ptr != NULL);

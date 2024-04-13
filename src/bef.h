@@ -42,6 +42,9 @@ extern uint8_t bef_mflag;
 /* Number of threads to use */
 extern uint16_t bef_numT;
 
+/* Proportion of memory to use */
+extern double bef_limit;
+
 /* Our error codes
  * In general, all error codes are negative, and all positive returns are errors
  * being propagated back from underlying libraries if available. When an error

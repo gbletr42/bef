@@ -2244,22 +2244,21 @@ static int bef_verify_fragment(char *frag, uint64_t nbyte, bef_hash_t hash_t,
 	uint8_t hash[BEF_HASH_SIZE];
 	uint8_t *target_hash;
 	struct bef_frag_header header;
+	struct bef_frag_header tmp;
 
 	/* Copy over our header */
 	memcpy(&header, frag, sizeof(header));
+	bef_unprepare_frag_header(&header);
+	memcpy(&tmp, &header, sizeof(header));
 
 	/* Get our hash */
 	if(flag == BEF_VERIFY_FRAG_H) {
 		/* Zero out the original hash */
-		memset(frag + sizeof(header.block_num) + sizeof(header.pbyte),
+		memset((char *) &tmp + sizeof(header.block_num) + sizeof(header.pbyte),
 		       '\0', sizeof(header.h_hash));
 		target_hash = header.h_hash;
 
-		ret = bef_digest(frag, sizeof(header), hash, hash_t);
-
-		/* Put the original hash back */
-		memcpy(frag + sizeof(header.block_num) + sizeof(header.pbyte),
-		       header.h_hash, sizeof(header.h_hash));
+		ret = bef_digest(&tmp, sizeof(header), hash, hash_t);
 	} else {
 		target_hash = header.b_hash;
 
@@ -2675,7 +2674,7 @@ static int bef_deconstruct_set(int output, char *ibuf, size_t ibuf_s,
 static int bef_deconstruct_sets(int input, int output, char *ibuf,
 				size_t ibuf_s, struct bef_real_header header)
 {
-	int ret =0;
+	int ret = 0;
 	ssize_t bret;
 	char *obuf = NULL;
 	size_t obuf_s = 0;

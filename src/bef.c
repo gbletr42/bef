@@ -117,7 +117,7 @@ size_t bef_mem_csz()
 	FILE *pid = fopen("/proc/self/statm", "r");
 	int ret = fscanf(pid, "%lu %lu", &tmp, &sz);
 	fclose(pid);
-	if(ret == 1)
+	if(ret == 2)
 		return (size_t) sz * getpagesize();
 	else
 		return 0;

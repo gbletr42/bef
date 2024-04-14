@@ -112,9 +112,10 @@ static char ***bef_work_arr = NULL;
 
 size_t bef_mem_csz()
 {
-	uint64_t sz = 0;
+	uint64_t tmp;
+	uint64_t sz;
 	FILE *pid = fopen("/proc/self/statm", "r");
-	int ret = fscanf(pid, "%lu", &sz);
+	int ret = fscanf(pid, "%lu %lu", &tmp, &sz);
 	if(ret == 1)
 		return (size_t) sz * getpagesize();
 	else

@@ -116,6 +116,7 @@ size_t bef_mem_csz()
 	uint64_t sz;
 	FILE *pid = fopen("/proc/self/statm", "r");
 	int ret = fscanf(pid, "%lu %lu", &tmp, &sz);
+	fclose(pid);
 	if(ret == 1)
 		return (size_t) sz * getpagesize();
 	else
@@ -128,6 +129,7 @@ size_t bef_mem_tsz()
 	char dummy[1024];
 	FILE *pid = fopen("/proc/meminfo", "r");
 	int ret = fscanf(pid, "%s %lu", dummy, &sz);
+	fclose(pid);
 	if(ret == 2)
 		return (size_t) sz * 1024;
 	else

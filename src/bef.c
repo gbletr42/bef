@@ -2432,7 +2432,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	/* If any has less than k good fragments, return with NEEDMORE */
 	for(i = 0; i < header.il_n; i++) {
 		if(index[i] < header.k) {
-			if(bef_vflag > 1)
+			if(bef_vflag)
 				fprintf(stderr, "ERROR: Block %lu does not have k (%u) intact fragments\n",
 					il_count * header.il_n - header.il_n + i,
 					header.k);
@@ -2709,15 +2709,10 @@ static int bef_deconstruct_sets(int input, int output, char *ibuf,
 						  &obuf, &obuf_s, &ahead, index,
 						  il_count, &pbyte, header);
 			if(ret == -BEF_ERR_NEEDMORE) {
-				if(ahead <= header.nbyte) {
+				if(ahead <= header.nbyte)
 					break;
-				} else {
-					if(bef_vflag)
-						fprintf(stderr,
-							"ERROR: Block set %lu does not have enough fragments\n",
-							il_count);
+				else
 					goto out;
-				}
 			} else if(ret != 0) {
 				goto out;
 			}

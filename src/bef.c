@@ -2254,8 +2254,7 @@ static int bef_verify_fragment(char *frag, uint64_t nbyte, bef_hash_t hash_t,
 	/* Get our hash */
 	if(flag == BEF_VERIFY_FRAG_H) {
 		/* Zero out the original hash */
-		memset((char *) &tmp + sizeof(header.block_num) + sizeof(header.pbyte),
-		       '\0', sizeof(header.h_hash));
+		memset((char *) &(tmp.h_hash), '\0', sizeof(header.h_hash));
 		target_hash = header.h_hash;
 
 		ret = bef_digest(&tmp, sizeof(header), hash, hash_t);

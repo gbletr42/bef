@@ -522,7 +522,7 @@ static void bef_upgrade(uint16_t *il_n, uint16_t *k, uint16_t *m,
 			upper_bs *= 2;
 			nbyte = upper_bs * *il_n;
 
-			if(((uint32_t) *k + *m) * 2 < maxfrag) {
+			if(((uint32_t) *k + *m) * 2 <= maxfrag) {
 				*k *= 2;
 				*m *= 2;
 			}

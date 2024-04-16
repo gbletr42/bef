@@ -73,6 +73,9 @@ Enables the special raw mode, which has different behaviors depending on whether
 \fB\-b\fR, \fB\-\-bsize\fR
 Specifies the block size to be used in construction of a BEF file. The default block size is 65536 bytes.
 .TP
+\fB\-u\fR, \fB\-\-upgrade\fR
+Upgrades any given parameters such that, in sum, the size of the total set of interleaved blocks is slightly larger than the given size. If a size of 0 is given, bef will attempt to read the size of the input file and use that as the given size. This only has effect when used with construction.
+.TP
 \fB\-k\fR, \fB\-\-data\fR
 The number of data fragments to split the block size into. The default number of data fragments is 15.
 .TP

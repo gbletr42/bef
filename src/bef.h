@@ -39,6 +39,10 @@ extern uint8_t bef_rflag;
 /* Minimize Flag */
 extern uint8_t bef_mflag;
 
+/* Upgrade Flag and Size */
+extern uint8_t bef_uflag;
+extern uint64_t bef_usize;
+
 /* Number of threads to use */
 extern uint16_t bef_numT;
 

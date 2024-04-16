@@ -44,6 +44,10 @@ uint8_t bef_rflag = 0;
 /* Our padding flag */
 uint8_t bef_mflag = 0;
 
+/* Our upgrade flag and size */
+uint8_t bef_uflag = 0;
+uint64_t bef_usize = 0;
+
 /* Our number of threads */
 uint16_t bef_numT = 1;
 
@@ -66,6 +70,10 @@ printf("-r|--raw			Flag to disable reading and/or writing the\n");
 printf("				header, You must provide the fragment size to\n");
 printf("				argument as well\n");
 printf("-b|--bsize			Block size for the BEF file\n");
+printf("-u|--upgrade			Maximizes the parameters such that the size\n");
+printf("				of the set is approximately what is given\n");
+printf("				If 0 is given, it will take the size of the\n");
+printf("				input file\n");
 printf("-k|--data			Number of data fragments per block\n");
 printf("-m|--parity			Number of parity fragments per block\n");
 printf("-l|--interleave			Number of blocks to interleave\n");
@@ -166,6 +174,7 @@ int main(int argc, char **argv) {
 	uint64_t tmp;
 	char *suffix;
 	int preset;
+	struct stat st;
 	struct option long_options[] =
 			{
 				{"help", no_argument, 0, 'h'},
@@ -180,6 +189,7 @@ int main(int argc, char **argv) {
 				{"preset", required_argument, 0, 'p'},
 				{"raw", required_argument, 0, 'r'},
 				{"bsize", required_argument, 0, 'b'},
+				{"upgrade", required_argument, 0, 'u'},
 				{"data", required_argument, 0, 'k'},
 				{"parity", required_argument, 0, 'm'},
 				{"interleave", required_argument, 0, 'l'},
@@ -191,7 +201,7 @@ int main(int argc, char **argv) {
 				{0, 0, 0, 0}
 			};
 
-	while ((opt = getopt_long(argc, argv, "hVvcdML:p:r:k:m:b:l:P:H:T:i:o:",
+	while ((opt = getopt_long(argc, argv, "hVvcdML:p:r:k:m:b:u:l:P:H:T:i:o:",
 				  long_options, &opt_index)) != -1) {
 		switch(opt) {
 		case 'h':
@@ -282,6 +292,17 @@ int main(int argc, char **argv) {
 				exit(-BEF_ERR_INVALINPUT);
 			}
 			bsize *= bef_convert_suffix(suffix);
+			break;
+		case 'u':
+			bef_uflag = 1;
+			bef_usize = (uint64_t) strtoull(optarg, &suffix, 10);
+			if((bef_usize == UINT64_MAX || bef_usize == 0) &&
+			   errno == ERANGE) {
+				fprintf(stderr,
+					"Input a proper value for -b!\n");
+				exit(-BEF_ERR_INVALINPUT);
+			}
+			bef_usize *= bef_convert_suffix(suffix);
 			break;
 		case 'l':
 			tmp = (uint64_t) strtoul(optarg, NULL, 10);
@@ -376,6 +397,20 @@ int main(int argc, char **argv) {
 		default:
 			break;
 		}
+	}
+
+	if(cflag && bef_uflag && bef_usize == 0 && input != STDIN_FILENO) {
+		fstat(input, &st);
+
+		if(S_ISFIFO(st.st_mode) ||
+		   S_ISSOCK(st.st_mode) ||
+		   S_ISCHR(st.st_mode) ||
+		   st.st_size == 0) {
+			fprintf(stderr, "ERROR: Invalid Input File Given for Upgrading\n");
+			exit(-BEF_ERR_INVALINPUT);
+		}
+
+		bef_usize = st.st_size;
 	}
 
 	if(((uint32_t) header.k) + header.m > bef_max_frag(header.par_t)) {

@@ -467,6 +467,76 @@ static void bef_openfec_destroy(of_session_t *session)
 }
 #endif
 
+/* Upgrades the size of the total set via this algorithm. The end result should
+ * be slightly larger than the given bytes (so it can encapsulate the entire
+ * input).
+ *
+ * 1.	Do binary search until max 65535 for number of blocks interleaved
+ * 2.	Do binary search unto infinity for block sizes, increasing fragment
+ *	counts too until their respective maximum.
+ */
+static void bef_upgrade(uint16_t *il_n, uint16_t *k, uint16_t *m,
+			uint64_t *bsize, uint32_t maxfrag, uint64_t wbyte)
+{
+	uint64_t nbyte;
+	uint16_t upper_il = 65535;
+	uint16_t lower_il = 0;
+	uint64_t upper_bs = *bsize;
+	uint64_t lower_bs = 0;
+
+	/* First do interleave number */
+	*il_n = (lower_il + upper_il) / 2;
+	while(upper_il != lower_il) {
+		nbyte = *bsize * *il_n;
+		if(nbyte > wbyte)
+			upper_il = *il_n;
+		else
+			lower_il = *il_n + 1;
+		*il_n = (lower_il + upper_il) / 2;
+	}
+	if(*il_n != 65535)
+		*il_n += 1; //To ensure it's larger
+	if(bef_vflag)
+		fprintf(stderr, "Upgrading il_n to %u\n", *il_n);
+	nbyte = *bsize * *il_n;
+
+	/* If that doesn't do it, do block size next */
+	if(nbyte < wbyte) {
+		/* Since it's infinite in scope, multiply by 2 until we're
+		 * bigger. Also increase fragment counts if possible
+		 */
+		while(nbyte < wbyte && upper_bs <= UINT64_MAX / 2) {
+			upper_bs *= 2;
+			nbyte = upper_bs * *il_n;
+
+			if(((uint32_t) *k + *m) * 2 < maxfrag) {
+				*k *= 2;
+				*m *= 2;
+			}
+		}
+		if(bef_vflag) {
+			fprintf(stderr, "Upgrading k to %u\n", *k);
+			fprintf(stderr, "Upgrading m to %u\n", *m);
+		}
+
+		*bsize = (lower_bs + upper_bs) / 2;
+		while(lower_bs != upper_bs) {
+			nbyte = *bsize * *il_n;
+			if(nbyte > wbyte)
+				upper_bs = *bsize;
+			else
+				lower_bs = *bsize + 1;
+			*bsize = (lower_bs + upper_bs) / 2;
+		}
+		if(wbyte > nbyte)
+			*bsize += (wbyte - nbyte) / *il_n + 1;
+
+		if(bef_vflag)
+			fprintf(stderr, "Upgrading block size to %lu\n",
+				*bsize);
+	}
+}
+
 /* Our great padding function from the sky. Gives the amount of padded bytes
  * that would satisfy these properties.
  *
@@ -2158,6 +2228,10 @@ static int bef_construct_init(char **ibuf, size_t *ibuf_s, uint64_t *bsize,
 			fprintf(stderr, "Setting il_n to default %u\n",
 				header->il_n);
 	}
+
+	if(bef_uflag)
+		bef_upgrade(&(header->il_n), &(header->k), &(header->m),
+			    bsize, bef_max_frag(header->par_t), bef_usize);
 
 #ifdef _OPENMP
 	if(bef_numT == 0) {

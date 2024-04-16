@@ -136,9 +136,19 @@ size_t bef_mem_tsz()
 		return 0;
 }
 
+void bef_chk_mem(size_t new)
+{
+	if(bef_mem_csz() + new >= bef_limit * bef_mem_tsz()) {
+		fprintf(stderr,
+			"ERROR: Reached Memory Limit (%.2f%), Cannot Continue\n",
+			bef_limit * 100);
+		exit(-BEF_ERR_OOM);
+	}
+}
+
 void *bef_malloc(size_t sz)
 {
-	assert(bef_mem_csz() + sz <= bef_limit * bef_mem_tsz());
+	bef_chk_mem(sz);
 	void *ptr = malloc(sz);
 	assert(ptr != NULL);
 	return ptr;
@@ -146,7 +156,7 @@ void *bef_malloc(size_t sz)
 
 void *bef_calloc(size_t nmemb, size_t sz)
 {
-	assert(bef_mem_csz() + sz * nmemb <= bef_limit * bef_mem_tsz());
+	bef_chk_mem(sz * nmemb);
 	void *ptr = calloc(nmemb, sz);
 	assert(ptr != NULL);
 	return ptr;
@@ -154,7 +164,7 @@ void *bef_calloc(size_t nmemb, size_t sz)
 
 void *bef_realloc(void *ptr, size_t sz)
 {
-	assert(bef_mem_csz() + sz <= bef_limit * bef_mem_tsz());
+	bef_chk_mem(sz);
 	assert(ptr != NULL);
 	ptr = realloc(ptr, sz);
 	assert(ptr != NULL);
@@ -163,7 +173,7 @@ void *bef_realloc(void *ptr, size_t sz)
 
 void *bef_reallocarray(void *ptr, size_t nmemb, size_t sz)
 {
-	assert(bef_mem_csz() + sz * nmemb <= bef_limit * bef_mem_tsz());
+	bef_chk_mem(sz * nmemb);
 	assert(ptr != NULL);
 	ptr = reallocarray(ptr, nmemb, sz);
 	assert(ptr != NULL);
@@ -202,6 +212,9 @@ char *bef_convert_text(uint32_t err, bef_hash_t hash_t, bef_par_t par_t)
 			break;
 		case BEF_ERR_INVALHEAD:
 			ret = "Invalid Header";
+			break;
+		case BEF_ERR_OOM:
+			ret = "Out of Memory";
 			break;
 		case BEF_ERR_OPENSSL:
 			ret = "OpenSSL";

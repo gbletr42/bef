@@ -64,6 +64,7 @@ extern double bef_limit;
 #define BEF_ERR_INVALHASH	7 //A digest is not equal to what was given
 #define BEF_ERR_NULLPTR		8 //Something's NULL and it ain't needed
 #define BEF_ERR_INVALHEAD	9 //Header's funky and wonky
+#define BEF_ERR_OOM		10 //Out of memory
 
 /* Placeholder error values, to be replaced with more descriptive errors */
 #define BEF_ERR_OPENSSL		1453 //Error in OpenSSL library

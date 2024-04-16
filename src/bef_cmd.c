@@ -399,7 +399,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if(cflag && bef_uflag && bef_usize == 0 && input != STDIN_FILENO) {
+	if(cflag && bef_uflag && bef_usize == 0) {
 		fstat(input, &st);
 
 		if(S_ISFIFO(st.st_mode) ||

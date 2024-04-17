@@ -113,12 +113,13 @@ static char ***bef_work_arr = NULL;
 size_t bef_mem_csz()
 {
 	uint64_t tmp;
-	uint64_t sz;
+	uint64_t res;
+	uint64_t shared;
 	FILE *pid = fopen("/proc/self/statm", "r");
-	int ret = fscanf(pid, "%lu %lu", &tmp, &sz);
+	int ret = fscanf(pid, "%lu %lu %lu", &tmp, &res, &shared);
 	fclose(pid);
-	if(ret == 2)
-		return (size_t) sz * getpagesize();
+	if(ret == 3)
+		return (size_t) (res - shared) * getpagesize();
 	else
 		return 0;
 }
@@ -2111,7 +2112,7 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s,
 	memset(ibuf + ibuf_s, '\0', pbyte);
 
 #ifdef _OPENMP
-		omp_set_num_threads(bef_numT);
+	omp_set_num_threads(bef_numT);
 #pragma omp parallel for private(ret, frags, tmp_len) if(bef_par_multi(header.par_t) == 0)
 #endif
 	for(uint16_t i = 0; i < header.il_n; i++) {
@@ -2573,7 +2574,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	assert(*obuf != NULL);
 
 #ifdef _OPENMP
-		omp_set_num_threads(bef_numT);
+	omp_set_num_threads(bef_numT);
 #pragma omp parallel for private(tmp, ret) if(bef_par_multi(header.par_t) == 0)
 #endif
 	for(uint16_t i = 0; i < header.il_n; i++) {

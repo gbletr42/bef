@@ -134,16 +134,23 @@ static size_t bef_obuf_s = 0;
  */
 static struct bef_mmap bef_mmap_io[2];
 
+/* Global FILE pointers for chk_mem, application exit closes them (like
+ * input/output)
+ */
+FILE *bef_csz = NULL;
+FILE *bef_tsz = NULL;
+
 size_t bef_mem_csz()
 {
 	uint64_t tmp;
 	uint64_t res;
 	uint64_t shared;
-	FILE *pid = fopen("/proc/self/statm", "r");
 	int ret;
-	assert(pid != NULL);
-	ret = fscanf(pid, "%lu %lu %lu", &tmp, &res, &shared);
-	fclose(pid);
+	if(bef_csz == NULL)
+		bef_csz = fopen("/proc/self/statm", "r");
+	assert(bef_csz != NULL);
+	ret = fscanf(bef_csz, "%lu %lu %lu", &tmp, &res, &shared);
+	rewind(bef_csz);
 	if(ret == 3)
 		return (size_t) (res - shared) * getpagesize();
 	else
@@ -154,11 +161,12 @@ size_t bef_mem_tsz()
 {
 	uint64_t sz = 0;
 	char dummy[1024];
-	FILE *pid = fopen("/proc/meminfo", "r");
 	int ret;
-	assert(pid != NULL);
-	ret = fscanf(pid, "%s %lu", dummy, &sz);
-	fclose(pid);
+	if(bef_tsz == NULL)
+		bef_tsz = fopen("/proc/meminfo", "r");
+	assert(bef_tsz != NULL);
+	ret = fscanf(bef_tsz, "%s %lu", dummy, &sz);
+	rewind(bef_tsz);
 	if(ret == 2)
 		return (size_t) sz * 1024;
 	else

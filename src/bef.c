@@ -140,7 +140,9 @@ size_t bef_mem_csz()
 	uint64_t res;
 	uint64_t shared;
 	FILE *pid = fopen("/proc/self/statm", "r");
-	int ret = fscanf(pid, "%lu %lu %lu", &tmp, &res, &shared);
+	int ret;
+	assert(pid != NULL);
+	ret = fscanf(pid, "%lu %lu %lu", &tmp, &res, &shared);
 	fclose(pid);
 	if(ret == 3)
 		return (size_t) (res - shared) * getpagesize();
@@ -153,7 +155,9 @@ size_t bef_mem_tsz()
 	uint64_t sz = 0;
 	char dummy[1024];
 	FILE *pid = fopen("/proc/meminfo", "r");
-	int ret = fscanf(pid, "%s %lu", dummy, &sz);
+	int ret;
+	assert(pid != NULL);
+	ret = fscanf(pid, "%s %lu", dummy, &sz);
 	fclose(pid);
 	if(ret == 2)
 		return (size_t) sz * 1024;
@@ -703,7 +707,6 @@ static uint64_t bef_sky_padding(size_t inbyte,
  */
 static ssize_t bef_safe_rw_mmap(char *buf, size_t nbyte, uint8_t flag)
 {
-	ssize_t ret;
 	struct bef_mmap *map;
 
 	if(flag == BEF_SAFE_READ) {
@@ -1088,7 +1091,6 @@ void bef_encode_free(char **data, char **parity, uint16_t k, uint16_t m)
 static void bef_construct_alloc(uint64_t nbyte, uint32_t km, uint16_t il_n,
 				uint8_t flag)
 {
-	size_t offset;
 	bef_work_s = nbyte * km * il_n;
 
 	if(flag == BEF_BUFFER_NEW)

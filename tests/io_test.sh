@@ -12,8 +12,8 @@ do
 	fi
 
 	bef -c -i $file -o $file.bef
-	bef -d -i $file.bef -o $file.out
-	if ! cmp $file $file.out
+	bef -d -i $file.bef -o $file.dec
+	if ! cmp $file $file.dec
 	then
 		echo "$file file test failed!"
 	fi
@@ -29,8 +29,8 @@ do
 	fi
 
 	bef -c -i ${file}byte -o $file.bef
-	bef -d -i $file.bef -o $file.out
-	if ! cmp ${file}byte $file.out
+	bef -d -i $file.bef -o $file.dec
+	if ! cmp ${file}byte $file.dec
 	then
 		echo "$file + byte file test failed!"
 	fi

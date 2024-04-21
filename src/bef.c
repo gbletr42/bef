@@ -175,12 +175,19 @@ size_t bef_mem_tsz()
 
 void bef_chk_mem(size_t new)
 {
+#ifdef _OPENMP
+#pragma omp critical
+{
+#endif
 	if(bef_mem_csz() + new >= bef_limit * bef_mem_tsz()) {
 		fprintf(stderr,
 			"ERROR: Reached Memory Limit (%.2f%%), Cannot Continue\n",
 			bef_limit * 100);
 		exit(-BEF_ERR_OOM);
 	}
+#ifdef _OPENMP
+}
+#endif
 }
 
 void *bef_malloc(size_t sz)

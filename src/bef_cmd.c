@@ -411,7 +411,11 @@ int main(int argc, char **argv) {
 	}
 
 	if(cflag && bef_uflag && bef_usize == 0) {
-		fstat(input, &st);
+		ret = fstat(input, &st);
+		if(ret != 0) {
+			perror("ERROR: failed to stat input file");
+			exit(-BEF_ERR_INVALINPUT);
+		}
 
 		if(S_ISFIFO(st.st_mode) ||
 		   S_ISSOCK(st.st_mode) ||

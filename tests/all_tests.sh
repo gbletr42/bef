@@ -11,10 +11,13 @@ then
 fi
 
 bash prepare_tests.sh
+bash mem_test.sh
 bash io_test.sh
 bash multi_test.sh
 bash minimize_test.sh
+bash upgrade_test.sh
 bash raw_test.sh
+bash seek_test.sh
 bash preset_test.sh
 bash insertion_test.sh
 bash bsize_test.sh

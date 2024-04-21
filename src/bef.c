@@ -64,6 +64,7 @@
 #include <sys/uio.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <sys/mman.h>
 
 /* Read/Write Interface flags */
 #define BEF_SAFE_READ	0
@@ -100,6 +101,15 @@ struct bef_fec_header {
 	uint32_t nbyte; //For backends that have variable number of bytes
 };
 
+/* Struct for mmap buffers */
+struct bef_mmap {
+	char *map; //mmaped buffer
+	size_t off; //offset
+	size_t len; //length of mmaped buffer
+	size_t size; //original file size, in case of padding
+	size_t ahead; //Number of bytes read ahead, for reading
+};
+
 #ifdef BEF_LIBERASURECODE
 static int bef_desc = -1;
 #endif
@@ -109,6 +119,20 @@ static fec_t *bef_context = NULL;
 static size_t bef_work_s;
 static char *bef_work = NULL;
 static char ***bef_work_arr = NULL;
+
+/* Global input/output buffers and file descriptors */
+static int bef_input = -1;
+static char *bef_ibuf = NULL;
+static size_t bef_ibuf_s = 0;
+static int bef_output = -1;
+static char *bef_obuf = NULL;
+static size_t bef_obuf_s = 0;
+
+/* Global mmap buffers
+ * 0 is input
+ * 1 is output
+ */
+static struct bef_mmap bef_mmap_io[2];
 
 size_t bef_mem_csz()
 {
@@ -141,7 +165,7 @@ void bef_chk_mem(size_t new)
 {
 	if(bef_mem_csz() + new >= bef_limit * bef_mem_tsz()) {
 		fprintf(stderr,
-			"ERROR: Reached Memory Limit (%.2f%), Cannot Continue\n",
+			"ERROR: Reached Memory Limit (%.2f%%), Cannot Continue\n",
 			bef_limit * 100);
 		exit(-BEF_ERR_OOM);
 	}
@@ -216,6 +240,9 @@ char *bef_convert_text(uint32_t err, bef_hash_t hash_t, bef_par_t par_t)
 			break;
 		case BEF_ERR_OOM:
 			ret = "Out of Memory";
+			break;
+		case BEF_ERR_MMAP:
+			ret = "MMAP";
 			break;
 		case BEF_ERR_OPENSSL:
 			ret = "OpenSSL";
@@ -481,6 +508,97 @@ static void bef_openfec_destroy(of_session_t *session)
 }
 #endif
 
+/* mmap init and destruction/unmapping
+ * Since this is so wrapped up with R/W, it uses the respective flags too
+ */
+static int bef_mmap_init(int fd, size_t size, uint8_t flag)
+{
+	int ret;
+	struct stat st;
+
+	/* Truncate file and then mmap if writing, else just mmap + buffer */
+	if(flag == BEF_SAFE_WRITE) {
+		ret = ftruncate(fd, size);
+		if(ret != 0) {
+			if(bef_vflag)
+				perror("ERROR: failed to truncate output file");
+			return -BEF_ERR_MMAP;
+		}
+		bef_mmap_io[1].len = size;
+		bef_mmap_io[1].size = size;
+		bef_mmap_io[1].off = 0;
+		bef_mmap_io[1].ahead = 0;
+		bef_mmap_io[1].map = mmap(NULL, size, PROT_READ | PROT_WRITE,
+					  MAP_SHARED, fd, 0);
+		if(bef_mmap_io[1].map == MAP_FAILED) {
+			if(bef_vflag)
+				perror("ERROR: failed to map output file");
+			return -BEF_ERR_MMAP;
+		}
+	} else {
+		ret = fstat(fd, &st);
+		if(ret != 0) {
+			if(bef_vflag)
+				perror("ERROR: failed to stat input file");
+			return -BEF_ERR_MMAP;
+		}
+		bef_mmap_io[0].len = st.st_size + size;
+		bef_mmap_io[0].size = st.st_size;
+		bef_mmap_io[0].off = 0;
+		bef_mmap_io[0].ahead = 0;
+		bef_mmap_io[0].map = mmap(NULL, st.st_size + size,
+					  PROT_READ | PROT_WRITE,
+					  MAP_PRIVATE | MAP_ANONYMOUS |
+					  MAP_NORESERVE, -1, 0);
+		if(bef_mmap_io[0].map == MAP_FAILED) {
+			if(bef_vflag)
+				perror("ERROR: failed to map input file");
+			return -BEF_ERR_MMAP;
+		}
+		bef_mmap_io[0].map = mmap(bef_mmap_io[0].map, st.st_size,
+					  PROT_READ | PROT_WRITE,
+					  MAP_PRIVATE | MAP_FIXED, fd, 0);
+		if(bef_mmap_io[0].map == MAP_FAILED) {
+			if(bef_vflag)
+				perror("ERROR: failed to map input file");
+			return -BEF_ERR_MMAP;
+		}
+	}
+
+	return 0;
+}
+
+static int bef_mmap_destroy(int fd, uint8_t flag)
+{
+	int ret;
+
+	if(flag == BEF_SAFE_READ)
+		ret = munmap(bef_mmap_io[0].map, bef_mmap_io[0].len);
+	else
+		ret = munmap(bef_mmap_io[1].map, bef_mmap_io[1].len);
+	if(ret != 0) {
+		if(bef_vflag) {
+			if(flag == BEF_SAFE_READ)
+				perror("ERROR: failed to unmap input file");
+			else
+				perror("ERROR: failed to unmap output file");
+		}
+		return -BEF_ERR_MMAP;
+	}
+
+	/* Truncate output file to real size */
+	if(flag == BEF_SAFE_WRITE) {
+		ret = ftruncate(fd, bef_mmap_io[1].off);
+		if(ret != 0) {
+			if(bef_vflag)
+				perror("ERROR: failed to truncate output file");
+			return -BEF_ERR_MMAP;
+		}
+	}
+
+	return 0;
+}
+
 /* Upgrades the size of the total set via this algorithm. The end result should
  * be slightly larger than the given bytes (so it can encapsulate the entire
  * input).
@@ -580,7 +698,42 @@ static uint64_t bef_sky_padding(size_t inbyte,
 	return pbyte;
 }
 
-static ssize_t bef_safe_rw(int fd, char *buf, size_t nbyte, uint8_t flag)
+/* Copy to mmaped buffer if the given buffer is different, increment offset and
+ * input/output buffer by nbyte
+ */
+static ssize_t bef_safe_rw_mmap(char *buf, size_t nbyte, uint8_t flag)
+{
+	ssize_t ret;
+	struct bef_mmap *map;
+
+	if(flag == BEF_SAFE_READ) {
+		map = &bef_mmap_io[0];
+		bef_ibuf = map->map + map->off - map->ahead;
+	} else {
+		map = &bef_mmap_io[1];
+		bef_obuf = map->map + map->off;
+	}
+
+	if(! (buf >= map->map && buf <= map->map + map->len)) {
+		if(flag == BEF_SAFE_READ)
+			memcpy(buf, map->map + map->off - map->ahead, nbyte);
+		else
+			memcpy(map->map + map->off, buf, nbyte);
+	}
+
+	if(nbyte > map->size - map->off)
+		nbyte = map->size - map->off;
+
+	map->off += nbyte;
+
+	/* Move pointer forward if writing */
+	if(flag == BEF_SAFE_WRITE)
+		bef_obuf = map->map + map->off;
+
+	return nbyte;
+}
+
+static ssize_t bef_safe_rw_seq(int fd, char *buf, size_t nbyte, uint8_t flag)
 {
 	ssize_t ret = 1; //Set to > 0 for loop
 	ssize_t offset = 0;
@@ -621,6 +774,14 @@ static ssize_t bef_safe_rw(int fd, char *buf, size_t nbyte, uint8_t flag)
 	}
 
 	return offset;
+}
+
+static ssize_t bef_safe_rw(int fd, char *buf, size_t nbyte, uint8_t flag)
+{
+	if(bef_sflag)
+		return bef_safe_rw_mmap(buf, nbyte, flag);
+	else
+		return bef_safe_rw_seq(fd, buf, nbyte, flag);
 }
 
 /* Both header and frag headers MUST BE LITTLE ENDIAN!!!!! */
@@ -924,17 +1085,27 @@ void bef_encode_free(char **data, char **parity, uint16_t k, uint16_t m)
  * fragments, saving costly mallocs/frees and also removing the need for a
  * separate output buffer, decreasing memory usage.
  */
-static void bef_construct_alloc(uint64_t nbyte, uint32_t km, uint16_t il_n)
+static void bef_construct_alloc(uint64_t nbyte, uint32_t km, uint16_t il_n,
+				uint8_t flag)
 {
 	size_t offset;
 	bef_work_s = nbyte * km * il_n;
 
-	bef_work = bef_malloc(bef_work_s);
+	if(flag == BEF_BUFFER_NEW)
+		bef_work = bef_malloc(bef_work_s);
 	bef_work_arr = bef_malloc(il_n * sizeof(*bef_work_arr));
 
+	for(uint16_t i = 0; i < il_n; i++)
+		*(bef_work_arr + i) = bef_malloc(km * sizeof(*(*bef_work_arr)));
+}
+
+static void bef_construct_arr(char *buf, uint64_t nbyte, uint32_t km,
+			      uint16_t il_n)
+{
+	size_t offset;
+	bef_work = buf;
 	for(uint16_t i = 0; i < il_n; i++) {
 		offset = i * nbyte;
-		*(bef_work_arr + i) = bef_malloc(km * sizeof(*(*bef_work_arr)));
 
 		for(uint32_t j = 0; j < km; j++) {
 			*(*(bef_work_arr + i) + j) = bef_work + offset;
@@ -943,9 +1114,10 @@ static void bef_construct_alloc(uint64_t nbyte, uint32_t km, uint16_t il_n)
 	}
 }
 
-static void bef_construct_free(uint16_t il_n)
+static void bef_construct_free(uint16_t il_n, uint8_t flag)
 {
-	free(bef_work);
+	if(flag == BEF_BUFFER_NEW)
+		free(bef_work);
 	for(uint16_t i = 0; i < il_n; i++)
 		free(*(bef_work_arr + i));
 	free(bef_work_arr);
@@ -1939,8 +2111,7 @@ void bef_decode_free(char *output)
 	free(output);
 }
 
-static int bef_construct_header(int input, char **ibuf, size_t *ibuf_s,
-				uint64_t *bsize, size_t *lret,
+static int bef_construct_header(uint64_t *bsize, size_t *lret,
 				struct bef_header *header)
 {
 	int ret;
@@ -1962,7 +2133,7 @@ static int bef_construct_header(int input, char **ibuf, size_t *ibuf_s,
 	 * and wrong, but unless you want like 4 fragments in total, it'll be
 	 * fine!
 	 */
-	rret = bef_safe_rw(input, *ibuf, *ibuf_s, BEF_SAFE_READ);
+	rret = bef_safe_rw(bef_input, bef_ibuf, bef_ibuf_s, BEF_SAFE_READ);
 	if(rret == -1 || rret == 0) {
 		ret = -BEF_ERR_READERR;
 		goto out;
@@ -1974,10 +2145,11 @@ static int bef_construct_header(int input, char **ibuf, size_t *ibuf_s,
 	 */
 	if(rret < *bsize * header->header.il_n && bef_mflag != 0) {
 		*bsize = rret / header->header.il_n;
-		*ibuf_s = header->header.il_n * *bsize;
-		*ibuf_s += bef_sky_padding(*ibuf_s, header->header.il_n,
-					   header->header.k, *bsize);
-		*ibuf = bef_realloc(*ibuf, *ibuf_s);
+		bef_ibuf_s = header->header.il_n * *bsize;
+		bef_ibuf_s += bef_sky_padding(bef_ibuf_s, header->header.il_n,
+					      header->header.k, *bsize);
+		if(bef_sflag == 0)
+			bef_ibuf = bef_realloc(bef_ibuf, bef_ibuf_s);
 		if(bef_vflag)
 			fprintf(stderr, "Minimizing block size to %lu\n",
 				*bsize);
@@ -1986,15 +2158,15 @@ static int bef_construct_header(int input, char **ibuf, size_t *ibuf_s,
 	/* Pad out if necessary */
 	pbyte = bef_sky_padding((size_t) rret, header->header.il_n,
 				header->header.k, *bsize);
-	memset(*ibuf + rret, '\0', pbyte);
+	memset(bef_ibuf + rret, '\0', pbyte);
 
 	*lret = (size_t) rret;
 
 	/* Set to size of one block */
-	if(rret != *ibuf_s / header->header.il_n)
-		rret = *ibuf_s / header->header.il_n;
+	if(rret != bef_ibuf_s / header->header.il_n)
+		rret = bef_ibuf_s / header->header.il_n;
 
-	ret = bef_encode_ecc(*ibuf, rret, data, parity, &frag_len,
+	ret = bef_encode_ecc(bef_ibuf, rret, data, parity, &frag_len,
 			     BEF_BUFFER_NEW, header->header);
 	if(ret != 0)
 		goto out;
@@ -2096,8 +2268,7 @@ static int bef_construct_blocks(char ***blocks,
 	return flag;
 }
 
-static int bef_encode_blocks(char *ibuf, size_t ibuf_s,
-			     uint64_t bsize, uint64_t il_count,
+static int bef_encode_blocks(size_t ibuf_s, uint64_t bsize, uint64_t il_count,
 			     struct bef_real_header header)
 {
 	int ret;
@@ -2109,7 +2280,7 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s,
 					 bsize);
 	size_t fbyte = (ibuf_s + pbyte) / header.il_n;
 
-	memset(ibuf + ibuf_s, '\0', pbyte);
+	memset(bef_ibuf + ibuf_s, '\0', pbyte);
 
 #ifdef _OPENMP
 	omp_set_num_threads(bef_numT);
@@ -2125,7 +2296,7 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s,
 		for(uint32_t j = 0; j < (uint32_t) header.k + header.m; j++)
 			*(frags + j) += sizeof(struct bef_frag_header);
 
-		ret = bef_encode_ecc(ibuf + i * fbyte, fbyte, frags,
+		ret = bef_encode_ecc(bef_ibuf + i * fbyte, fbyte, frags,
 				     frags + header.k, &tmp_len,
 				     BEF_BUFFER_GIFT, header);
 
@@ -2155,22 +2326,21 @@ static int bef_encode_blocks(char *ibuf, size_t ibuf_s,
 	return ret;
 }
 
-static int bef_construct_encode(int input, int output,
-				char *ibuf, uint64_t bsize, size_t lret,
+static int bef_construct_encode(uint64_t bsize, size_t lret,
 				struct bef_real_header header)
 {
 	int ret;
 	ssize_t bret;
-	size_t ibuf_s = header.il_n * bsize;
 	uint64_t il_count = 0;
-	ibuf_s += bef_sky_padding(ibuf_s, header.il_n, header.k, bsize);
+	bef_ibuf_s = header.il_n * bsize;
+	bef_ibuf_s += bef_sky_padding(bef_ibuf_s, header.il_n, header.k, bsize);
 
 	/* Redo very first few blocks, source still in input */
-	ret = bef_encode_blocks(ibuf, lret, bsize, il_count++, header);
+	ret = bef_encode_blocks(lret, bsize, il_count++, header);
 	if(ret != 0)
 		goto out;
 
-	bret = bef_safe_rw(output, bef_work, bef_work_s, BEF_SAFE_WRITE);
+	bret = bef_safe_rw(bef_output, bef_work, bef_work_s, BEF_SAFE_WRITE);
 	if(bret != bef_work_s) {
 		ret = -BEF_ERR_WRITEERR;
 		goto out;
@@ -2178,7 +2348,8 @@ static int bef_construct_encode(int input, int output,
 
 	/* Eternal read loop incoming */
 	while(1) {
-		bret = bef_safe_rw(input, ibuf, ibuf_s, BEF_SAFE_READ);
+		bret = bef_safe_rw(bef_input, bef_ibuf, bef_ibuf_s,
+				   BEF_SAFE_READ);
 		if(bret == 0)
 			break; //No more data to read!
 		else if(bret == -1) {
@@ -2186,11 +2357,17 @@ static int bef_construct_encode(int input, int output,
 			goto out;
 		}
 
-		ret = bef_encode_blocks(ibuf, bret, bsize, il_count++, header);
+		/* Reconstruct our work array if mmap */
+		if(bef_sflag)
+			bef_construct_arr(bef_obuf, header.nbyte,
+					  (uint32_t) header.k + header.m,
+					  header.il_n);
+
+		ret = bef_encode_blocks(bret, bsize, il_count++, header);
 		if(ret != 0)
 			goto out;
 
-		bret = bef_safe_rw(output, bef_work, bef_work_s,
+		bret = bef_safe_rw(bef_output, bef_work, bef_work_s,
 				   BEF_SAFE_WRITE);
 		if(bret != bef_work_s) {
 			ret = -BEF_ERR_WRITEERR;
@@ -2199,12 +2376,16 @@ static int bef_construct_encode(int input, int output,
 	}
 
 out:
-	free(ibuf);
+	if(bef_sflag) {
+		if(bef_mmap_destroy(bef_input, BEF_SAFE_READ) != 0)
+			return -BEF_ERR_MMAP;
+	} else {
+		free(bef_ibuf);
+	}
 	return ret;
 }
 
-static int bef_construct_init(char **ibuf, size_t *ibuf_s, uint64_t *bsize,
-			      struct bef_real_header *header)
+static int bef_construct_init(uint64_t *bsize, struct bef_real_header *header)
 {
 	int ret;
 
@@ -2261,9 +2442,17 @@ static int bef_construct_init(char **ibuf, size_t *ibuf_s, uint64_t *bsize,
 		return ret;
 
 	/* Estimate size of our shared input buffer, using bsize and k */
-	*ibuf_s = header->il_n * *bsize;
-	*ibuf_s += bef_sky_padding(*ibuf_s, header->il_n, header->k, *bsize);
-	*ibuf = bef_malloc(*ibuf_s);
+	bef_ibuf_s = header->il_n * *bsize;
+	bef_ibuf_s += bef_sky_padding(bef_ibuf_s, header->il_n, header->k,
+				      *bsize);
+	if(bef_sflag) {
+		ret = bef_mmap_init(bef_input, bef_ibuf_s, BEF_SAFE_READ);
+		if(ret != 0)
+			return ret;
+		bef_ibuf = bef_mmap_io[0].map;
+	} else {
+		bef_ibuf = bef_malloc(bef_ibuf_s);
+	}
 
 	return 0;
 }
@@ -2274,33 +2463,48 @@ int bef_construct(int input, int output, uint64_t bsize,
 {
 	int ret;
 	ssize_t bret;
-	char *ibuf;
-	size_t ibuf_s;
 	struct bef_header head;
 	size_t lret;
+	size_t obuf_s;
+	bef_input = input;
+	bef_output = output;
 
-	ret = bef_construct_init(&ibuf, &ibuf_s, &bsize, &header);
+	ret = bef_construct_init(&bsize, &header);
 	if(ret != 0)
 		return ret;
 
 	head.header = header;
-	ret = bef_construct_header(input, &ibuf, &ibuf_s, &bsize, &lret,
-				   &head);
+	ret = bef_construct_header(&bsize, &lret, &head);
 	if(ret != 0)
 		goto out;
 
+	/* Convert header endianness back to host */
+	bef_unprepare_header(&(head.header));
+
+	if(bef_sflag) {
+		obuf_s = head.header.nbyte * head.header.il_n;
+		obuf_s *= (uint32_t) head.header.k + head.header.m;
+		if(bsize * head.header.il_n <= bef_mmap_io[0].size) {
+			obuf_s *= bef_mmap_io[0].size;
+			obuf_s /= bsize * head.header.il_n;
+		}
+		obuf_s += sizeof(head);
+		ret = bef_mmap_init(bef_output, obuf_s, BEF_SAFE_WRITE);
+		if(ret != 0)
+			goto out;
+		bef_obuf = bef_mmap_io[1].map;
+	}
+
 	if(bef_rflag == 0) {
 		/* Write our header to output */
-		bret = bef_safe_rw(output, (char *) &head, sizeof(head),
+		bef_prepare_header(&(head.header));
+		bret = bef_safe_rw(bef_output, (char *) &head, sizeof(head),
 				   BEF_SAFE_WRITE);
 		if(bret != sizeof(head)) {
 			ret = -BEF_ERR_WRITEERR;
 			goto out;
 		}
 	}
-
-	/* Convert header endianness back to host */
-	bef_unprepare_header(&(head.header));
 
 	if(head.header.nbyte == 0) {
 		ret = -BEF_ERR_INVALINPUT;
@@ -2311,15 +2515,32 @@ int bef_construct(int input, int output, uint64_t bsize,
 	}
 
 	/* Construct our global buffers */
-	bef_construct_alloc(head.header.nbyte,
-			    (uint32_t) head.header.k + head.header.m,
-			    head.header.il_n);
+	if(bef_sflag) {
+		bef_construct_alloc(head.header.nbyte,
+				    (uint32_t) head.header.k + head.header.m,
+				    head.header.il_n, BEF_BUFFER_GIFT);
+		bef_construct_arr(bef_obuf, head.header.nbyte,
+				  (uint32_t) head.header.k + head.header.m,
+				  head.header.il_n);
+	} else {
+		bef_construct_alloc(head.header.nbyte,
+				    (uint32_t) head.header.k + head.header.m,
+				    head.header.il_n, BEF_BUFFER_NEW);
+		bef_construct_arr(bef_work, head.header.nbyte,
+				  (uint32_t) head.header.k + head.header.m,
+				  head.header.il_n);
+	}
 
 	/* ibuf should be freed by this function, so no need to check */
-	ret = bef_construct_encode(input, output, ibuf, bsize, lret,
-				   head.header);
+	ret = bef_construct_encode(bsize, lret, head.header);
 
-	bef_construct_free(head.header.il_n);
+	if(bef_sflag) {
+		bef_construct_free(head.header.il_n, BEF_BUFFER_GIFT);
+		if(bef_mmap_destroy(bef_output, BEF_SAFE_WRITE) != 0)
+			return -BEF_ERR_MMAP;
+	} else {
+		bef_construct_free(head.header.il_n, BEF_BUFFER_NEW);
+	}
 out:
 	bef_destroy(header);
 	return ret;
@@ -2365,14 +2586,15 @@ static int bef_verify_fragment(char *frag, uint64_t nbyte, bef_hash_t hash_t,
 		return 0;
 }
 
-static int bef_deconstruct_header(int input, struct bef_real_header *header)
+static int bef_deconstruct_header(struct bef_real_header *header)
 {
 	int ret;
 	ssize_t bret;
 	struct bef_header head;
 	uint8_t hash[BEF_HASH_SIZE];
 
-	bret = bef_safe_rw(input, (char *) &head, sizeof(head), BEF_SAFE_READ);
+	bret = bef_safe_rw(bef_input, (char *) &head, sizeof(head),
+			   BEF_SAFE_READ);
 	if(bret != sizeof(head))
 		return -BEF_ERR_READERR;
 
@@ -2411,7 +2633,7 @@ static int bef_deconstruct_header(int input, struct bef_real_header *header)
 /* Assumes we won't reach end of buffer exhausting sbyte, giving bad input where
  * we can't will lead to a buffer overflow
  */
-static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
+static int bef_scan_fragment(size_t *offset, size_t sbyte,
 			     struct bef_real_header header)
 {
 	int ret;
@@ -2424,7 +2646,7 @@ static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
 	}
 
 	for(; sbyte > 0; sbyte--) {
-		ret = bef_verify_fragment(ibuf + *offset, header.nbyte,
+		ret = bef_verify_fragment(bef_ibuf + *offset, header.nbyte,
 					  header.hash_t, BEF_VERIFY_FRAG_H);
 		if(ret == 0)
 			return 0;
@@ -2439,8 +2661,7 @@ static int bef_scan_fragment(char *ibuf, size_t *offset, size_t sbyte,
 	return -BEF_ERR_NEEDMORE;
 }
 
-static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
-				     uint32_t *index,
+static int bef_deconstruct_fragments(uint32_t *index,
 				     uint64_t *pbyte, size_t *ahead,
 				     uint64_t il_count,
 				     struct bef_real_header header)
@@ -2453,20 +2674,20 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	uint64_t sbyte;
 	uint64_t nbyte;
 
-	for(offset = ibuf_s - *ahead; offset < ibuf_s;) {
-		if(ibuf_s < header.nbyte)
+	for(offset = bef_ibuf_s - *ahead; offset < bef_ibuf_s;) {
+		if(bef_ibuf_s < header.nbyte)
 			break;
 
-		if(offset <= ibuf_s - header.nbyte)
-			sbyte = ibuf_s - header.nbyte - offset;
+		if(offset <= bef_ibuf_s - header.nbyte)
+			sbyte = bef_ibuf_s - header.nbyte - offset;
 		else
 			break;
 
-		ret = bef_scan_fragment(ibuf, &offset, sbyte, header);
+		ret = bef_scan_fragment(&offset, sbyte, header);
 		if(ret != 0)
 			break;
 
-		memcpy(&frag_h, ibuf + offset, sizeof(frag_h));
+		memcpy(&frag_h, bef_ibuf + offset, sizeof(frag_h));
 		bef_unprepare_frag_header(&frag_h);
 
 		/* Check if it's outside our range, and if so break out of the
@@ -2485,15 +2706,19 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 		if(frag_h.pbyte > 0 && *pbyte == 0)
 			*pbyte = frag_h.pbyte;
 
-		ret = bef_verify_fragment(ibuf + offset, header.nbyte,
+		ret = bef_verify_fragment(bef_ibuf + offset, header.nbyte,
 					  header.hash_t, BEF_VERIFY_FRAG_B);
 		if(ret == 0) {
 			i = frag_h.block_num % header.il_n;
 
 			if(index[i] < (uint32_t) header.k + header.m) {
-				memcpy(*(*(bef_work_arr + i) + index[i]),
-				       ibuf + offset + sizeof(frag_h),
-				       header.nbyte - sizeof(frag_h));
+				if(bef_sflag)
+					*(*(bef_work_arr + i) + index[i]) =
+					bef_ibuf + offset + sizeof(frag_h);
+				else
+					memcpy(*(*(bef_work_arr + i) + index[i]),
+					       bef_ibuf + offset + sizeof(frag_h),
+					       header.nbyte - sizeof(frag_h));
 				index[i] += 1;
 			}
 			offset += header.nbyte;
@@ -2502,7 +2727,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 		}
 	}
 
-	*ahead = ibuf_s - offset;
+	*ahead = bef_ibuf_s - offset;
 
 	/* Haven't seen next set of blocks */
 	if(flag == 0) {
@@ -2512,7 +2737,7 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 		/* We know if we reached EOF if our input buffer is smaller than
 		 * a set of interleaved blocks
 		 */
-		if(ibuf_s == nbyte)
+		if(bef_ibuf_s >= nbyte)
 			return -BEF_ERR_NEEDMORE;
 	}
 
@@ -2531,15 +2756,13 @@ static int bef_deconstruct_fragments(char *ibuf, size_t ibuf_s,
 	return 0;
 }
 
-static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
-				  char **obuf, size_t *obuf_s,
-				  uint64_t *pbyte, size_t *ahead,
+static int bef_deconstruct_blocks(uint64_t *pbyte, size_t *ahead,
 				  uint64_t il_count, uint32_t *index,
 				  struct bef_real_header header)
 {
 	int ret;
 	int flag = 0;
-	size_t onbyte = *obuf_s / header.il_n;
+	size_t onbyte = bef_obuf_s / header.il_n;
 	struct bef_frag_header frag_h;
 	uint64_t frag_b = header.nbyte - sizeof(frag_h);
 	char *tmp;
@@ -2551,27 +2774,32 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 		return -BEF_ERR_OVERFLOW;
 	}
 
-	ret = bef_deconstruct_fragments(ibuf, ibuf_s, index,
-					pbyte, ahead, il_count, header);
+	ret = bef_deconstruct_fragments(index, pbyte, ahead, il_count, header);
 	if(ret != 0)
 		return ret;
 
 	/* Do our first decode two times, like with construction, to get
 	 * the size of the output buffer
 	 */
-	if(*obuf_s == 0) {
-		ret = bef_decode_ecc(*bef_work_arr, *index,
-				     frag_b, obuf, &onbyte,
-				     BEF_BUFFER_NEW, header);
+	if(bef_obuf_s == 0) {
+		if(bef_sflag)
+			ret = bef_decode_ecc(*bef_work_arr, *index,
+					     frag_b, &bef_obuf, &onbyte,
+					     BEF_BUFFER_GIFT, header);
+		else
+			ret = bef_decode_ecc(*bef_work_arr, *index,
+					     frag_b, &bef_obuf, &onbyte,
+					     BEF_BUFFER_NEW, header);
 		if(ret != 0) {
 			return ret;
 		} else {
-			*obuf_s = header.il_n * onbyte;
-			*obuf = bef_realloc(*obuf, *obuf_s);
+			bef_obuf_s = header.il_n * onbyte;
+			if(bef_sflag == 0)
+				bef_obuf = bef_realloc(bef_obuf, bef_obuf_s);
 		}
 	}
 
-	assert(*obuf != NULL);
+	assert(bef_obuf != NULL);
 
 #ifdef _OPENMP
 	omp_set_num_threads(bef_numT);
@@ -2581,7 +2809,7 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 		if(flag != 0)
 			continue; //Iterate until done
 
-		tmp = *obuf + i * onbyte;
+		tmp = bef_obuf + i * onbyte;
 		ret = bef_decode_ecc(*(bef_work_arr + i), *(index + i),
 				     frag_b, &tmp, &tmp_s,
 				     BEF_BUFFER_GIFT, header);
@@ -2595,15 +2823,21 @@ static int bef_deconstruct_blocks(char *ibuf, size_t ibuf_s,
 	return ret;
 }
 
-static int bef_deconstruct_init(int input,
-				char **ibuf, size_t *ibuf_s,
-				struct bef_real_header *header)
+static int bef_deconstruct_init(struct bef_real_header *header)
 {
 	int ret;
+	size_t nbyte;
+
+	if(bef_sflag) {
+		ret = bef_mmap_init(bef_input, 0, BEF_SAFE_READ);
+		if(ret != 0)
+			return ret;
+		bef_ibuf = bef_mmap_io[0].map;
+	}
 
 	if(bef_rflag == 0) {
 		/* Get our header and verify its sanity */
-		ret = bef_deconstruct_header(input, header);
+		ret = bef_deconstruct_header(header);
 		if(ret != 0)
 			return ret;
 
@@ -2719,52 +2953,64 @@ static int bef_deconstruct_init(int input,
 	}
 
 	/* Allocate our buffers */
-	*ibuf_s = ((uint32_t) header->k + header->m);
-	*ibuf_s *= header->nbyte * header->il_n;
-	*ibuf = bef_malloc(*ibuf_s);
-
-	/* Allocate our work arrays */
-	bef_construct_alloc(header->nbyte - sizeof(struct bef_frag_header),
-			    (uint32_t) header->k + header->m, header->il_n);
+	bef_ibuf_s = ((uint32_t) header->k + header->m);
+	bef_ibuf_s *= header->nbyte * header->il_n;
+	nbyte = header->nbyte - sizeof(struct bef_frag_header);
+	if(bef_sflag) {
+		/* output can never be larger than input */
+		ret = bef_mmap_init(bef_output, bef_mmap_io[0].size,
+				    BEF_SAFE_WRITE);
+		if(ret != 0)
+			return ret;
+		bef_obuf = bef_mmap_io[1].map;
+		bef_construct_alloc(nbyte, (uint32_t) header->k + header->m,
+				    header->il_n, BEF_BUFFER_GIFT);
+		bef_construct_arr(NULL, nbyte,
+				  (uint32_t) header->k + header->m,
+				  header->il_n);
+	} else {
+		bef_ibuf = bef_malloc(bef_ibuf_s);
+		bef_construct_alloc(nbyte, (uint32_t) header->k + header->m,
+				    header->il_n, BEF_BUFFER_NEW);
+		bef_construct_arr(bef_work, nbyte,
+				  (uint32_t) header->k + header->m,
+				  header->il_n);
+	}
 
 	return 0;
 }
 
-static int bef_deconstruct_set(int output, char *ibuf, size_t ibuf_s,
-			       char **obuf, size_t *obuf_s, uint64_t *ahead,
-			       uint32_t *index, uint64_t il_count,
-			       uint64_t *pbyte, struct bef_real_header header)
+static int bef_deconstruct_set(uint64_t *ahead, uint32_t *index,
+			       uint64_t il_count, uint64_t *pbyte,
+			       struct bef_real_header header)
 {
 	int ret;
 	ssize_t bret;
 
-	ret = bef_deconstruct_blocks(ibuf, ibuf_s, obuf, obuf_s, pbyte,
-				     ahead, il_count, index, header);
+	ret = bef_deconstruct_blocks(pbyte, ahead, il_count, index, header);
 	if(ret != 0)
 		return ret;
 
 	/* Check for integer overflow */
-	if(*obuf_s - *pbyte > *obuf_s){//Impossible, unless overflowed
+	if(bef_obuf_s - *pbyte > bef_obuf_s){//Impossible, unless overflowed
 		if(bef_vflag)
 			fprintf(stderr,
 				"ERROR: padded bytes overflowed\n");
 		return -BEF_ERR_OVERFLOW;
 	}
 
-	bret = bef_safe_rw(output, *obuf, *obuf_s - *pbyte, BEF_SAFE_WRITE);
-	if(bret != *obuf_s - *pbyte)
+	bret = bef_safe_rw(bef_output, bef_obuf, bef_obuf_s - *pbyte,
+			   BEF_SAFE_WRITE);
+	if(bret != bef_obuf_s - *pbyte)
 		return -BEF_ERR_WRITEERR;
 
 	return 0;
 }
 
-static int bef_deconstruct_sets(int input, int output, char *ibuf,
-				size_t ibuf_s, struct bef_real_header header)
+static int bef_deconstruct_sets(struct bef_real_header header)
 {
 	int ret = 0;
 	ssize_t bret;
-	char *obuf = NULL;
-	size_t obuf_s = 0;
 	uint64_t ahead = 0;
 	uint64_t il_count = 1;
 	uint64_t pbyte = 0;
@@ -2772,29 +3018,29 @@ static int bef_deconstruct_sets(int input, int output, char *ibuf,
 
 	/* Another eternal read loop incoming */
 	while(1) {
-		bret = bef_safe_rw(input, ibuf + ahead, ibuf_s - ahead,
-				   BEF_SAFE_READ);
+		bret = bef_safe_rw(bef_input, bef_ibuf + ahead,
+				   bef_ibuf_s - ahead, BEF_SAFE_READ);
 		if(bret == 0 && ahead <= header.nbyte) {
 			/* Flush out any remaining fragments */
+			bef_ibuf_s = ahead;
 			if(ret == -BEF_ERR_NEEDMORE)
-				ret = bef_deconstruct_set(output, ibuf,
-							  ahead, &obuf, &obuf_s,
-							  &ahead, index,
+				ret = bef_deconstruct_set(&ahead, index,
 							  il_count, &pbyte,
 							  header);
 			break; //Read it all folks!
 		} else if(bret == -1) {
 			ret = -BEF_ERR_READERR;
 			goto out;
-		} else if(ahead + bret < ibuf_s) {
-			ibuf_s = ahead + bret;
+		} else if(ahead + bret < bef_ibuf_s) {
+			bef_ibuf_s = ahead + bret;
 		}
 
-		ahead = ibuf_s;
+		if(bef_sflag)
+			bef_mmap_io[0].ahead = 0;
+		ahead = bef_ibuf_s;
 		while(ahead >= header.nbyte) {
-			ret = bef_deconstruct_set(output, ibuf, ibuf_s,
-						  &obuf, &obuf_s, &ahead, index,
-						  il_count, &pbyte, header);
+			ret = bef_deconstruct_set(&ahead, index, il_count,
+						  &pbyte, header);
 			if(ret == -BEF_ERR_NEEDMORE) {
 				if(ahead <= header.nbyte)
 					break;
@@ -2809,8 +3055,13 @@ static int bef_deconstruct_sets(int input, int output, char *ibuf,
 		}
 
 		/* Copy over input that was read ahead */
-		if(ahead > 0)
-			memmove(ibuf, ibuf + ibuf_s - ahead, ahead);
+		if(ahead > 0) {
+			if(bef_sflag)
+				bef_mmap_io[0].ahead = ahead;
+			else
+				memmove(bef_ibuf, bef_ibuf + bef_ibuf_s - ahead,
+					ahead);
+		}
 	}
 
 	if(ahead > 0)
@@ -2819,24 +3070,33 @@ static int bef_deconstruct_sets(int input, int output, char *ibuf,
 
 out:
 	free(index);
-	free(obuf);
 	return ret;
 }
 
 int bef_deconstruct(int input, int output, struct bef_real_header header)
 {
 	int ret = 0;
-	char *ibuf = NULL;
-	size_t ibuf_s;
+	bef_input = input;
+	bef_output = output;
 
-	ret = bef_deconstruct_init(input, &ibuf, &ibuf_s, &header);
+	ret = bef_deconstruct_init(&header);
 	if(ret != 0)
 		return ret;
 
-	ret = bef_deconstruct_sets(input, output, ibuf, ibuf_s, header);
+	ret = bef_deconstruct_sets(header);
 
 	bef_destroy(header);
-	bef_construct_free(header.il_n);
-	free(ibuf);
+
+	if(bef_sflag) {
+		bef_construct_free(header.il_n, BEF_BUFFER_GIFT);
+		if(bef_mmap_destroy(bef_input, BEF_SAFE_READ) != 0)
+			return -BEF_ERR_MMAP;
+		if(bef_mmap_destroy(bef_output, BEF_SAFE_WRITE) != 0)
+			return -BEF_ERR_MMAP;
+	} else {
+		bef_construct_free(header.il_n, BEF_BUFFER_NEW);
+		free(bef_ibuf);
+		free(bef_obuf);
+	}
 	return ret;
 }

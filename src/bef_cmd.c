@@ -48,6 +48,9 @@ uint8_t bef_mflag = 0;
 uint8_t bef_uflag = 0;
 uint64_t bef_usize = 0;
 
+/* Our Seek flag */
+uint8_t bef_sflag = 0;
+
 /* Our number of threads */
 uint16_t bef_numT = 1;
 
@@ -64,6 +67,9 @@ printf("-c|--construct|--encode		Constructs a new BEF file\n");
 printf("-d|--deconstruct|--decode	Deconstructs an existing BEF file\n");
 printf("-M|--minimize			Minimize the given block size if the incoming\n");
 printf("				stream is small\n");
+printf("-S|--seek|--mmap		Enables Seek mode, which directly maps files\n");
+printf("				to memory using mmap, rather than reading\n");
+printf("				or writing into buffers.\n");
 printf("-L|--limit			Percentage of total memory that bef can use\n");
 printf("-p|--preset			Set the arguments to a given preset\n");
 printf("-r|--raw			Flag to disable reading and/or writing the\n");
@@ -185,6 +191,8 @@ int main(int argc, char **argv) {
 				{"deconstruct", no_argument, 0, 'd'},
 				{"decode", no_argument, 0, 'd'},
 				{"minimize", no_argument, 0, 'M'},
+				{"seek", no_argument, 0, 'S'},
+				{"mmap", no_argument, 0, 'S'},
 				{"limit", required_argument, 0, 'L'},
 				{"preset", required_argument, 0, 'p'},
 				{"raw", required_argument, 0, 'r'},
@@ -201,7 +209,7 @@ int main(int argc, char **argv) {
 				{0, 0, 0, 0}
 			};
 
-	while ((opt = getopt_long(argc, argv, "hVvcdML:p:r:k:m:b:u:l:P:H:T:i:o:",
+	while ((opt = getopt_long(argc, argv, "hVvcdMSL:p:r:k:m:b:u:l:P:H:T:i:o:",
 				  long_options, &opt_index)) != -1) {
 		switch(opt) {
 		case 'h':
@@ -223,6 +231,9 @@ int main(int argc, char **argv) {
 			break;
 		case 'M':
 			bef_mflag = 1;
+			break;
+		case 'S':
+			bef_sflag = 1;
 			break;
 		case 'L':
 			tmp = (uint64_t) strtoul(optarg, NULL, 10);

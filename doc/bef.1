@@ -53,6 +53,9 @@ Inverse of the above, deconstructs a received BEF file from input and outputs th
 \fB\-M\fR, \fB\-\-minimize\fR
 Enables the minimize flag, which modifies the behavior of the constructor such that when the given stream ends before exhausting the expected input buffer (size of interleaved blocks), it will minimize the block size to a smaller value so as to not bloat the output with lots of padded bytes. Generally unrecommended, as it decreases the maximal burst corruption size that the file can take before being unrecoverable.
 .TP
+\fB\-S\fR, \fB\-\-seek\fR, \fB\-\-mmap\fR
+Enables Seek/mmap mode, which directly maps files to memory rather than sequentially read/write them using intermediate buffers. This can be used when bef uses too much memory otherwise, but is otherwise unrecommended for three reasons. One, it requires both input and output files to be regular, seekable files. Two, bef has zero control over how much memory is actively used and is reliant on the page cache. Three, It tends to be significantly slower than sequential reading, likely due to having significantly greater number of page faults. But for insane use cases, like a terabyte file with 128GiB sets, it can be used to great effect.
+.TP
 \fB\-L\fR, \fB\-\-limit\fR
 Sets the memory limit for bef as a percentage of the total memory available. By default, it is set at 10% of the total memory.
 .TP

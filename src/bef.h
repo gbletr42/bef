@@ -43,6 +43,9 @@ extern uint8_t bef_mflag;
 extern uint8_t bef_uflag;
 extern uint64_t bef_usize;
 
+/* Seek Flag */
+extern uint8_t bef_sflag;
+
 /* Number of threads to use */
 extern uint16_t bef_numT;
 
@@ -65,6 +68,7 @@ extern double bef_limit;
 #define BEF_ERR_NULLPTR		8 //Something's NULL and it ain't needed
 #define BEF_ERR_INVALHEAD	9 //Header's funky and wonky
 #define BEF_ERR_OOM		10 //Out of memory
+#define BEF_ERR_MMAP		11 //MMAP error
 
 /* Placeholder error values, to be replaced with more descriptive errors */
 #define BEF_ERR_OPENSSL		1453 //Error in OpenSSL library

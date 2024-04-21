@@ -7,11 +7,21 @@ do
 	do
 		if ! cmp $file <(bef -c -L50 -l 1 -b $bsize -i $file | bef -d -L50)
 		then
-			echo "block size test $bsize on $file failed!"
+			bef -c -S -l 1 -b $bsize -i $file -o ${file}.bef
+			bef -d -S -i ${file}.bef -o ${file}.dec
+			if ! cmp $file ${file}.dec
+			then
+				echo "block size test $bsize on $file failed!"
+			fi
 		fi
 		if ! cmp $file <(bef -c -L50 -l 1 -b $(($bsize + 1)) -i $file | bef -d -L50)
 		then
-			echo "block size test $(($bsize + 1)) on $file failed!"
+			bef -c -S -l 1 -b $(($bsize + 1)) -i $file -o ${file}.bef
+			bef -d -S -i ${file}.bef -o ${file}.dec
+			if ! cmp $file ${file}.dec
+			then
+				echo "block size test $bsize on $file failed!"
+			fi
 		fi
 	done
 done

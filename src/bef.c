@@ -2486,10 +2486,9 @@ int bef_construct(int input, int output, uint64_t bsize,
 	if(bef_sflag) {
 		obuf_s = head.header.nbyte * head.header.il_n;
 		obuf_s *= (uint32_t) head.header.k + head.header.m;
-		if(bsize * head.header.il_n <= bef_mmap_io[0].size) {
-			obuf_s *= bef_mmap_io[0].size;
-			obuf_s /= bsize * head.header.il_n;
-		}
+		if(bsize * head.header.il_n <= bef_mmap_io[0].size)
+			obuf_s *= bef_mmap_io[0].size /
+				  (bsize * head.header.il_n) + 1;
 		obuf_s += sizeof(head);
 		ret = bef_mmap_init(bef_output, obuf_s, BEF_SAFE_WRITE);
 		if(ret != 0)

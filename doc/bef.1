@@ -1,4 +1,4 @@
-.TH "bef" "1" "6 Apr 2024" "bef v0.3.0" "User Commands"
+.TH "bef" "1" "21 Apr 2024" "bef v0.3.1" "User Commands"
 .P
 .SH "NAME"
 bef \- An extensible, fast, and useable file utility to encode and decode erasure coded streams of data.
@@ -57,7 +57,7 @@ Enables the minimize flag, which modifies the behavior of the constructor such t
 Enables Seek/mmap mode, which directly maps files to memory rather than sequentially read/write them using intermediate buffers. This can be used when bef uses too much memory otherwise, but is otherwise unrecommended for three reasons. One, it requires both input and output files to be regular, seekable files. Two, bef has zero control over how much memory is actively used and is reliant on the page cache. Three, It tends to be significantly slower than sequential reading, likely due to having significantly greater number of page faults. But for insane use cases, like a terabyte file with 128GiB sets, it can be used to great effect.
 .TP
 \fB\-L\fR, \fB\-\-limit\fR
-Sets the memory limit for bef as a percentage of the total memory available. By default, it is set at 10% of the total memory.
+Sets the memory limit for bef as a percentage of the total memory available. By default, it is set at 10% of the total memory. This does not counted shared memory, which can come from say memory mapped files from \fB\-S\fR.
 .TP
 \fB\-p\fR, \fB\-\-preset\fR
 Sets the header options to defined presets each suited to a particular use case. This argument, due to getopt, is position dependent such that if you specify it before other argument, you can modify the header options contrary to the preset. This could be useful if you want to modify a portion of the preset, but not specify the whole thing. This does not replace the defaults, those still get applied if you set any option to 0 or omit it.

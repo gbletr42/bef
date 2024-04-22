@@ -16,8 +16,8 @@ do
 		fi
 		if ! cmp $file <(bef -c -L50 -l 1 -b $(($bsize + 1)) -i $file | bef -d -L50)
 		then
-			bef -c -S -l 1 -b $(($bsize + 1)) -i $file -o ${file}.bef
-			bef -d -S -i ${file}.bef -o ${file}.dec
+			bef -c -S -L100 -l 1 -b $(($bsize + 1)) -i $file -o ${file}.bef
+			bef -d -S -L100 -i ${file}.bef -o ${file}.dec
 			if ! cmp $file ${file}.dec
 			then
 				echo "block size test $bsize on $file failed!"

@@ -635,6 +635,7 @@ static void bef_upgrade(uint16_t *il_n, uint16_t *k, uint16_t *m,
 	uint64_t upper_bs = *bsize;
 	uint64_t lower_bs = 0;
 	uint64_t max_bs;
+	uint8_t max_km = 0;
 
 	/* First do interleave number */
 	*il_n = (lower_il + upper_il) / 2;
@@ -664,6 +665,8 @@ static void bef_upgrade(uint16_t *il_n, uint16_t *k, uint16_t *m,
 			if(((uint32_t) *k + *m) * 2 <= maxfrag) {
 				*k *= 2;
 				*m *= 2;
+			} else {
+				max_km = 1;
 			}
 		}
 		max_bs = upper_bs;
@@ -684,7 +687,7 @@ static void bef_upgrade(uint16_t *il_n, uint16_t *k, uint16_t *m,
 		 * fragment size to the ball park of around 0.75-1x the original
 		 * size
 		 */
-		if(*bsize <= (max_bs + max_bs / 2) / 2) {
+		if(*bsize <= (max_bs + max_bs / 2) / 2 && ! max_km) {
 			*k /= 2;
 			*m /= 2;
 		}

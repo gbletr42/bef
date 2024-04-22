@@ -634,6 +634,7 @@ static void bef_upgrade(uint16_t *il_n, uint16_t *k, uint16_t *m,
 	uint16_t lower_il = 0;
 	uint64_t upper_bs = *bsize;
 	uint64_t lower_bs = 0;
+	uint64_t max_bs;
 
 	/* First do interleave number */
 	*il_n = (lower_il + upper_il) / 2;
@@ -665,10 +666,7 @@ static void bef_upgrade(uint16_t *il_n, uint16_t *k, uint16_t *m,
 				*m *= 2;
 			}
 		}
-		if(bef_vflag) {
-			fprintf(stderr, "Upgrading k to %u\n", *k);
-			fprintf(stderr, "Upgrading m to %u\n", *m);
-		}
+		max_bs = upper_bs;
 
 		*bsize = (lower_bs + upper_bs) / 2;
 		while(lower_bs != upper_bs) {
@@ -682,9 +680,21 @@ static void bef_upgrade(uint16_t *il_n, uint16_t *k, uint16_t *m,
 		if(wbyte > nbyte)
 			*bsize += (wbyte - nbyte) / *il_n + 1;
 
-		if(bef_vflag)
+		/* Downgrade k and m if block size is small. This should get the
+		 * fragment size to the ball park of around 0.75-1x the original
+		 * size
+		 */
+		if(*bsize <= (max_bs + max_bs / 2) / 2) {
+			*k /= 2;
+			*m /= 2;
+		}
+
+		if(bef_vflag) {
+			fprintf(stderr, "Upgrading k to %u\n", *k);
+			fprintf(stderr, "Upgrading m to %u\n", *m);
 			fprintf(stderr, "Upgrading block size to %lu\n",
 				*bsize);
+		}
 	}
 }
 

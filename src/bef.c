@@ -193,16 +193,18 @@ static void bef_chk_mem(size_t new)
 
 void *bef_malloc(size_t sz)
 {
-	void *ptr = malloc(sz);
+	void *ptr;
 	bef_chk_mem(sz);
+	ptr = malloc(sz);
 	assert(ptr != NULL);
 	return ptr;
 }
 
 void *bef_calloc(size_t nmemb, size_t sz)
 {
-	void *ptr = calloc(nmemb, sz);
+	void *ptr;
 	bef_chk_mem(sz * nmemb);
+	ptr = calloc(nmemb, sz);
 	assert(ptr != NULL);
 	return ptr;
 }

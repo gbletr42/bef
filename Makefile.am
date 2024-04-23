@@ -17,7 +17,7 @@
 
 AUTOMAKE_OPTIONS = subdir-objects
 
-CFLAGS += -Wall -Wextra -Wpedantic -Wno-sign-compare -Wpadded -Wcast-align -Wstrict-aliasing -Wpointer-arith -Winit-self -Wshadow -Wswitch-enum -Wstrict-prototypes -Wmissing-prototypes -Wredundant-decls -Wfloat-equal -Wundef -Wdeclaration-after-statement $(OPENMP_CFLAGS)
+CFLAGS += -Wall -Wextra -Wpedantic -Wno-sign-compare -Wpadded -Wcast-align -Wstrict-aliasing -Wpointer-arith -Winit-self -Wshadow -Wswitch-enum -Wstrict-prototypes -Wmissing-prototypes -Wredundant-decls -Wfloat-equal -Wundef -Wdeclaration-after-statement -Wvla $(OPENMP_CFLAGS)
 CXXFLAGS += $(CFLAGS)
 
 bin_PROGRAMS = bef

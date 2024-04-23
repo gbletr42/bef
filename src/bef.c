@@ -1206,7 +1206,7 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 			     struct bef_real_header header)
 {
 	size_t size = inbyte / header.k; //Size of each data fragment, prepadded
-	unsigned int block_nums[header.m];
+	unsigned int block_nums[255];
 	*frag_len = sizeof(struct bef_fec_header) + size;
 
 	if(flag == BEF_BUFFER_NEW)
@@ -1257,7 +1257,7 @@ static int bef_encode_cm256(const char *input, size_t inbyte, char **data,
 	int ret;
 	bef_cm256_encoder_params params = {header.k, header.m,
 					inbyte / header.k};
-	bef_cm256_block iblock[header.k];
+	bef_cm256_block iblock[255];
 	char *block_buf = bef_malloc((uint64_t) header.m * params.BlockBytes);
 	*frag_len = params.BlockBytes + sizeof(struct bef_fec_header);
 
@@ -1312,7 +1312,7 @@ static int bef_encode_openfec(const char *input, size_t inbyte, char **data,
 	int ret;
 	of_status_t oret;
 	of_session_t *session = NULL;
-	char *symbol_tbl[header.k + header.m];
+	char *symbol_tbl[256];
 	size_t size = inbyte / header.k;
 	uint16_t rflag = 0;
 	size_t header_s = sizeof(struct bef_fec_header);
@@ -1542,7 +1542,7 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 	uint32_t bound = k;
 	uint32_t found = 0;
 	uint16_t counter = 0;
-	uint32_t stack[m];
+	uint32_t *stack = bef_malloc(m * sizeof(*stack));
 	struct bef_fec_header header;
 
 	if(flag == BEF_RECON_NULL)
@@ -1591,6 +1591,7 @@ static uint32_t bef_decode_reconstruct(char **frags, uint32_t frag_len,
 		}
 	}
 
+	free(stack);
 	return found;
 }
 
@@ -1644,9 +1645,9 @@ static int bef_decode_libfec(char **frags, uint32_t frag_len, size_t frag_b,
 			     struct bef_real_header header)
 {
 	char *rec_buf;
-	char *rec_arr[header.m]; //At most m outputs
-	char *recon_arr[header.k]; //At most k outputs
-	uint32_t block_nums[header.k];
+	char *rec_arr[255]; //At most m outputs
+	char *recon_arr[255]; //At most k outputs
+	uint32_t block_nums[255];
 	uint32_t found;
 	char *tmp = NULL; //To avoid duplicate paths later
 	size_t size = frag_b - sizeof(struct bef_fec_header);
@@ -1700,11 +1701,11 @@ static int bef_decode_cm256(char **frags, uint32_t dummy, size_t frag_b,
 			    struct bef_real_header header)
 {
 	int ret;
-	uint32_t block_nums[header.k];
-	char *recon_arr[header.k];
+	uint32_t block_nums[255];
+	char *recon_arr[255];
 	bef_cm256_encoder_params params = {header.k, header.m,
 					frag_b - sizeof(struct bef_fec_header)};
-	bef_cm256_block blocks[header.k];
+	bef_cm256_block blocks[255];
 	*onbyte = (uint64_t) params.BlockBytes * header.k;
 
 	if(flag == BEF_BUFFER_NEW)
@@ -1748,9 +1749,9 @@ static int bef_decode_openfec(char **frags, uint32_t frag_len, size_t frag_b,
 	int ret;
 	of_status_t oret;
 	of_session_t *session = NULL;
-	uint32_t block_nums[header.k+header.m];
-	char *recon_arr[header.k+header.m];
-	char *source_tbl[header.k];
+	uint32_t block_nums[256];
+	char *recon_arr[256];
+	char *source_tbl[255];
 	size_t size = frag_b - sizeof(struct bef_fec_header);
 	*onbyte = size * header.k;
 

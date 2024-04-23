@@ -453,7 +453,7 @@ _invert_mat(gf* src, size_t k) {
  * p = coefficients of the matrix (p_i)
  * q = values of the polynomial (known)
  */
-void
+static void
 _invert_vdm (gf* src, unsigned k) {
     unsigned i, j, row, col;
     gf *b, *c, *p;
@@ -625,7 +625,7 @@ fec_encode(const fec_t* code, const gf*restrict const*restrict const src, gf*res
  *
  * @param matrix a space allocated for a k by k matrix
  */
-void
+static void
 build_decode_matrix_into_space(const fec_t*restrict const code, const unsigned*const restrict index, const unsigned k, gf*restrict const matrix) {
     unsigned int i;
     gf* p;

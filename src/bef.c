@@ -140,7 +140,7 @@ static struct bef_mmap bef_mmap_io[2];
 FILE *bef_csz = NULL;
 FILE *bef_tsz = NULL;
 
-size_t bef_mem_csz()
+static size_t bef_mem_csz(void)
 {
 	uint64_t tmp;
 	uint64_t res;
@@ -157,7 +157,7 @@ size_t bef_mem_csz()
 		return 0;
 }
 
-size_t bef_mem_tsz()
+static size_t bef_mem_tsz(void)
 {
 	uint64_t sz = 0;
 	char dummy[1024];
@@ -173,7 +173,7 @@ size_t bef_mem_tsz()
 		return 0;
 }
 
-void bef_chk_mem(size_t new)
+static void bef_chk_mem(size_t new)
 {
 #ifdef _OPENMP
 #pragma omp critical
@@ -193,16 +193,16 @@ void bef_chk_mem(size_t new)
 
 void *bef_malloc(size_t sz)
 {
-	bef_chk_mem(sz);
 	void *ptr = malloc(sz);
+	bef_chk_mem(sz);
 	assert(ptr != NULL);
 	return ptr;
 }
 
 void *bef_calloc(size_t nmemb, size_t sz)
 {
-	bef_chk_mem(sz * nmemb);
 	void *ptr = calloc(nmemb, sz);
+	bef_chk_mem(sz * nmemb);
 	assert(ptr != NULL);
 	return ptr;
 }

@@ -28,7 +28,7 @@
 #include <limits.h> //Apparently POSIX has SSIZE_MAX here
 
 /* Our sexy magic number ( ͡° ͜ʖ ͡°) */
-static const char *bef_magic = "BEFBABE";
+#define BEF_MAGIC "BEFBABE"
 
 /* Verbosity Flag */
 extern uint8_t bef_vflag;

@@ -2163,7 +2163,7 @@ static int bef_construct_header(uint64_t *bsize, size_t *lret,
 	uint64_t pbyte;
 
 	/* Our lovely, sexy, beautiful magic number */
-	memcpy(header->magic, "BEFBABE", 7);
+	memcpy(header->magic, BEF_MAGIC, 7);
 	header->hash_t = header->header.hash_t;
 
 	/* To get nbyte, which depends on the backend used, we are going to
@@ -2637,7 +2637,7 @@ static int bef_deconstruct_header(struct bef_real_header *header)
 	if(bret != sizeof(head))
 		return -BEF_ERR_READERR;
 
-	if(memcmp(head.magic, "BEFBABE", 7) != 0) {
+	if(memcmp(head.magic, BEF_MAGIC, 7) != 0) {
 		if(bef_vflag)
 			fprintf(stderr, "ERROR: Invalid Header Magic\n");
 		return -BEF_ERR_INVALHEAD; //WTF, it's not our BABE!?

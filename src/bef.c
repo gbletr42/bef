@@ -1231,9 +1231,10 @@ static int bef_encode_libfec(const char *input, size_t inbyte, char **data,
 		*(parity + i) += sizeof(struct bef_fec_header); //Evil and Satanic
 	}
 
-	/* I rather live with the warning than add a million consts */
-	fec_encode(bef_context, (unsigned char **) data,
-		   (unsigned char **) parity, block_nums, header.m, size);
+	fec_encode(bef_context,
+		   (const unsigned char *const *const) data,
+		   (unsigned char *const *const) parity,
+		   block_nums, header.m, size);
 
 	/* Now set the pointers back */
 	for(int i = 0; i < header.k; i++)
@@ -1412,7 +1413,8 @@ static int bef_encode_leopard(const char *input, size_t inbyte, char **data,
 	for(uint32_t i = 0; i < work_count; i++)
 		*(work_data + i) = work_buf + i * size;
 
-	res = leo_encode(size, header.k, header.m, work_count, data,
+	res = leo_encode(size, header.k, header.m, work_count,
+			 (const void *const *const) data,
 			 (void **) work_data);
 
 	for(uint32_t i = 0; i < work_count; i++)
@@ -1671,8 +1673,9 @@ static int bef_decode_libfec(char **frags, uint32_t frag_len, size_t frag_b,
 		*output = bef_malloc(*onbyte);
 
 	if(found > 0) //We can just read directly if they're all good
-		fec_decode(bef_context, (unsigned char **) recon_arr,
-			   (unsigned char **) rec_arr,
+		fec_decode(bef_context,
+			   (const unsigned char *const *const) recon_arr,
+			   (unsigned char *const *const) rec_arr,
 			   (unsigned int *) block_nums, size);
 
 	/* Write to output buffer */
@@ -1837,7 +1840,9 @@ static int bef_decode_leopard(char **frags, uint32_t frag_len, size_t frag_b,
 			       (uint32_t) header.k, header.m, BEF_RECON_NULL);
 
 	res = leo_decode(size, header.k, header.m, work_count,
-			 recon_arr, recon_arr + header.k, (void **) work_data);
+			 (const void *const *const) recon_arr,
+			 (const void *const *const) recon_arr + header.k,
+			 (void **) work_data);
 	if(res == Leopard_Success) {
 		for(uint16_t i = 0; i < header.k; i++) {
 			if(*(recon_arr + i) == NULL)
@@ -2158,7 +2163,7 @@ static int bef_construct_header(uint64_t *bsize, size_t *lret,
 	uint64_t pbyte;
 
 	/* Our lovely, sexy, beautiful magic number */
-	memcpy(header->magic, bef_magic, 7);
+	memcpy(header->magic, "BEFBABE", 7);
 	header->hash_t = header->header.hash_t;
 
 	/* To get nbyte, which depends on the backend used, we are going to
@@ -2599,7 +2604,8 @@ static int bef_verify_fragment(char *frag, uint64_t nbyte, bef_hash_t hash_t,
 		memset((char *) &(tmp.h_hash), '\0', sizeof(header.h_hash));
 		target_hash = header.h_hash;
 
-		ret = bef_digest(&tmp, sizeof(header), hash, hash_t);
+		ret = bef_digest((const char *) &tmp, sizeof(header), hash,
+				 hash_t);
 	} else {
 		target_hash = header.b_hash;
 
@@ -2631,7 +2637,7 @@ static int bef_deconstruct_header(struct bef_real_header *header)
 	if(bret != sizeof(head))
 		return -BEF_ERR_READERR;
 
-	if(memcmp(head.magic, bef_magic, 7) != 0) {
+	if(memcmp(head.magic, "BEFBABE", 7) != 0) {
 		if(bef_vflag)
 			fprintf(stderr, "ERROR: Invalid Header Magic\n");
 		return -BEF_ERR_INVALHEAD; //WTF, it's not our BABE!?
